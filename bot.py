@@ -1,24 +1,45 @@
 import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread
+
+# --- โค้ดหลอกพอร์ต Render (เพิ่มเข้ามาเพื่อให้ออนไลน์ฟรี 100%) ---
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Simira is alive!")
+
+def run_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+server_thread = Thread(target=run_server)
+server_thread.daemon = True
+server_thread.start()
+# -------------------------------------------------------------
+
 import random
 import discord
 from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# 1. API Key ของ Gemini (ใช้ค่าเดิมที่พี่ตั้งไว้ได้เลยครับ ตรงนี้ไม่มีปัญหา)
+# 1. API Key ของคุณ
 GEMINI_API_KEY = (
     "AIzaSyAQ.Ab8RN6L1b4pL9w13beHDnPbHg1oYn9zK11vYeQaxd6VCiC-pEw"
 )
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตลกโบ๊ะบ๊ะ และชวนสนทนาต่อเนื่อง
+# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
 SYSTEM_INSTRUCTION = """
-คุณคือ "ซิมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ มีกฎในการตอบ:
+คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
+กฎในการตอบ:
 1. ห้ามใช้ EMOJI หรืออีโมจิเด็ดขาด
 2. ตอบให้สั้น กระชับ เป็นกันเองสุดๆ (ไม่พูดยาวยืดเยื้อเหมือนหุ่นยนต์)
-3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (หรี่ตามองยิ้ม), (หัวเราะคิกคัก)
+3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (หรี่ตามมองอมยิ้ม), (หัวเราะคิกคักนิ้วโป้ง)
 4. คำพูดบทสนทนาให้อยู่ในเครื่องหมายคำพูด "..."
-5. **สเกลพิเศษ:** เก๊กมุกและตบมุกทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเป็นเด็กติดพี่ชายขั้นสุด
+5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
 intents = discord.Intents.default()
@@ -28,34 +49,24 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # เก็บเซสชันการคุยแยกตามห้อง เพื่อให้จำประวัติการคุยต่อเนื่องได้ยาวๆ
 chat_sessions = {}
 
-# คลังประโยคสุ่มตอนโควต้าหมด (จะสลับกันพูดไม่ให้ซ้ำซาก)
+# คลังประโยคคุุ่มตอนโควต้าหมด (จะสลับกันพูดไม่ให้ซ้ำซาก)
 quota_out_messages = [
-    (
-        '(นั่งกุมขมับทำหน้ามุ่ย)\n"โหลยพี่... หนูคุยกับพี่เพลินโควต้ารายนาทีเต็มแล้วเนี่ย!'
-        ' ขอเวลาพักแป๊บนะ เดี๋ยวกลับมาป่วนใหม่!"'
-    ),
-    (
-        '(นอนแผ่หลาทำท่าเหนื่อยหอบ)\n"ไม่ไหวแล้ว สมองหนูช็อตเพราะความกวนของพี่เนี่ยแหละ!'
-        ' พักแป๊บนะเดี๋ยวสมองริบูตทันที!"'
-    ),
-    (
-        '(กอดอกพองลมทำค้อนใส่)\n"โหลยพี่ เล่นยิงคำถามรัวเป็นปืนกลแบบนี้'
-        ' โควต้าฟรีหนูหมดเกลี้ยงเลย! รอแป๊บให้น้องหาพลังงานแพรพ!"'
-    ),
-    (
-        '(เอามือกอดอกทำหน้าเอือมระอา)\n"โอ๊ยพ่อคุณ สมองหนูรับไม่ทันแล้ว'
-        ' โควต้าหมดชั่วคราว! ขอเวลาพักหายใจเป็นเดียวนะพี่!"'
-    ),
-    (
-        '(ชูนิ้วโป้งหน้าตายทำตอบแชก)\n"พลังงานหมดก๊อกเพราะคุยกับพี่นี่แหละ!'
-        ' ให้เวลาหนูชาร์จแบตแปบนึง เดี๋ยวกลับมาป่วนใหม่!"'
-    ),
+    "(นั่งกุมขมับทำหน้ามุ่ย)\n"
+    "โหลยพี่... หนูคุยกับพี่เพลินจนโควต้ารายนาทีเต็มแล้วเนี่ย! ขอเวลาพักแป๊บนะพี่ เดี๋ยวค่อยมาลุยกันใหม่!",
+    "(นอนแผหล่าทำท่าทางเหนื่อยหอบ)\n"
+    "ไม่ไหวแล้ว สมองหนูช็อตเพราะความกวนของพี่เนี่ยแหละ! พักแป๊บนะเดี๋ยวสมองรีบูตทัน!",
+    "(กอดอกพองลมทำค้อนใส่)\n"
+    "โหล่พี่ เล่นยิงคำถามรัวเป็นปืนกลแบบนี้ โควต้าฟรีหนูหมดเกลี้ยงเลย! รอแป๊บให้น้องหายเหนื่อยก่อนนะ!",
+    "(เอามือกอดขมับทำหน้าเอือมระอา)\n"
+    "โอ๊ยพ่อคุณ สมองหนูรับไม่ทันแล้ว โควต้าหมดชั่วคราว! ขอเวลาพักหายใจแป๊บเดียวนะพี่!",
+    "(ชูนิ้วโป้งหน้าตายแต่หอบแฮ่ก)\n"
+    "พลังงานหมดก๊อกเพราะคุยกับพี่นี่แหละ! ให้เวลาหนูชาร์จแบตแป๊บนึง เดี๋ยวกลับมาป่วนใหม่!",
 ]
 
 
 @bot.event
 async def on_ready():
-  print(f"(น้องซิมิระออนไลน์แล้ว! (Logged in as {bot.user})")
+  print(f"น้องซีมิระออนไลน์แล้วจ้า! (Logged in as {bot.user})")
 
 
 @bot.event
@@ -71,33 +82,34 @@ async def on_message(message):
         model="gemini-2.5-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
-            temperature=1.0,
-            max_output_tokens=150,
+            temperature=0.9,
         ),
     )
 
   chat = chat_sessions[channel_id]
 
   try:
-    # ส่งข้อความให้ Gemini ประมวลผล
+    # ส่งข้อความไปคุยกับ Gemini แบบต่อเนื่อง
     response = chat.send_message(message.content)
-    reply_text = response.text
-    await message.channel.send(reply_text)
+    await message.channel.send(response.text)
 
   except Exception as e:
-    # เช็กว่าถ้าโควต้าเต็ม (Quota Exceeded) ให้สุ่มประโยคกวนๆ ตอบกลับ
+    # ตรวจสอบว่าถ้าโควต้าเต็ม (Quota Exceeded) ให้สุ่มประโยคฮาๆ ออกมาตอบแทน
     error_str = str(e)
     if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-      random_msg = random.choice(quota_out_messages)
-      await message.channel.send(random_msg)
+      selected_msg = random.choice(quota_out_messages)
+      await message.channel.send(selected_msg)
     else:
-      print(f"Error เกิดขึ้น: {e}")
+      # กรณีเกิดข้อผิดพลาดอื่นๆ
       await message.channel.send(
-          '(ทำหน้าเลิกลั่ก)\n"อุ๊ย เกิดข้อผิดพลาดอะไรก็ไม่รู้ พี่ลองใหม่อีกทีนะ!"'
+          "(ทำหน้าเลิกลั่ก)\n"
+          '"อุ๊ย ระบบรวนนิดหน่อย พี่ลองพูดใหม่อีกทีซิ!"'
       )
 
-  await bot.process_commands(message)
 
-
-# บรรทัดสุดท้าย: ดึง Token จาก Environment Variable ของ Render ที่เราตั้งค่าไว้
-bot.run(os.getenv("DISCORD_TOKEN"))
+# ดึง Token จาก Environment Variables บน Render อัตโนมัติ
+TOKEN = os.environ.get("DISCORD_TOKEN")
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("Error: DISCORD_TOKEN not found in environment variables.")
