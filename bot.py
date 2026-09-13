@@ -22,11 +22,12 @@ server_thread.start()
 import random
 import discord
 from discord.ext import commands
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
-# ใช้คีย์ตัวเดิมของพี่ได้เลยครับ
+# ใส่คีย์ตัวใหม่ที่ขึ้นต้นด้วย "AQ." ของพี่ตรงนี้ได้เลยครับ
 GEMINI_API_KEY = "AQ.Ab8RN6Kj_sxSx6dNyomnw9HqWJAtxDaFFRb8-0kVBlfzU3WOpg"
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
@@ -60,11 +61,13 @@ async def on_message(message):
     channel_id = message.channel.id
 
     if channel_id not in chat_sessions:
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
-            system_instruction=SYSTEM_INSTRUCTION
+        chat_sessions[channel_id] = client.chats.create(
+            model="gemini-2.0-flash",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.9,
+            ),
         )
-        chat_sessions[channel_id] = model.start_chat(history=[])
 
     chat = chat_sessions[channel_id]
 
@@ -84,5 +87,3 @@ async def on_message(message):
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
-else:
-    print("Error: DISCORD_TOKEN not found in environment variables.")
