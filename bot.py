@@ -2,7 +2,7 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
-# --- โค้ดหลอกพอร์ต Render (เพิ่มเข้ามาเพื่อให้ออนไลน์ฟรี 100%) ---
+# --- โค้ดหลอกพอร์ต Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -17,19 +17,17 @@ def run_server():
 server_thread = Thread(target=run_server)
 server_thread.daemon = True
 server_thread.start()
-# -------------------------------------------------------------
+# -----------------------------
 
 import random
 import discord
 from discord.ext import commands
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 
-# 1. API Key ตัวใหม่ล่าสุดของพี่ (ใส่แบบถูกต้องครบถ้วนแล้ว)
+# ใช้คีย์ตัวเดิมของพี่ได้เลยครับ
 GEMINI_API_KEY = "AQ.Ab8RN6Kj_sxSx6dNyomnw9HqWJAtxDaFFRb8-0kVBlfzU3WOpg"
-client = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
 กฎในการตอบ:
@@ -43,7 +41,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# เก็บเซสชันการคุยแยกตามห้อง
 chat_sessions = {}
 
 quota_out_messages = [
@@ -63,13 +60,11 @@ async def on_message(message):
     channel_id = message.channel.id
 
     if channel_id not in chat_sessions:
-        chat_sessions[channel_id] = client.chats.create(
-            model="gemini-2.0-flash",
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.9,
-            ),
+        model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash",
+            system_instruction=SYSTEM_INSTRUCTION
         )
+        chat_sessions[channel_id] = model.start_chat(history=[])
 
     chat = chat_sessions[channel_id]
 
