@@ -5,8 +5,11 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# 1. แก้ไขให้ดึง GEMINI_API_KEY จาก Environment Variables ของ Render เพื่อความปลอดภัย
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# 1. API Key ของ Gemini (ใช้ค่าเดิมที่พี่ตั้งไว้ได้เลยครับ ตรงนี้ไม่มีปัญหา)
+GEMINI_API_KEY = (
+    "AIzaSyAQ.Ab8RN6L1b4pL9w13beHDnPbHg1oYn9zK11vYeQaxd6VCiC-pEw"
+)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ปรับ System Instruction ให้ตอบสั้นกระชับ ตลกโบ๊ะบ๊ะ และชวนสนทนาต่อเนื่อง
 SYSTEM_INSTRUCTION = """
@@ -96,5 +99,5 @@ async def on_message(message):
   await bot.process_commands(message)
 
 
-# 2. แก้ไขจุดที่ผิดพลาด: ดึง Token ผ่าน Environment Variable ของ Render อย่างถูกต้อง
+# บรรทัดสุดท้าย: ดึง Token จาก Environment Variable ของ Render ที่เราตั้งค่าไว้
 bot.run(os.getenv("DISCORD_TOKEN"))
