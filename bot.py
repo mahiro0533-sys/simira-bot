@@ -94,17 +94,16 @@ async def on_message(message):
     await message.channel.send(response.text)
 
   except Exception as e:
-    # ตรวจสอบว่าถ้าโควต้าเต็ม (Quota Exceeded) ให้สุ่มประโยคฮาๆ ออกมาตอบแทน
+    # พริ้นต์ Error ออกมาดูที่หน้า Logs ของ Render เพื่อเช็กสาเหตุที่แท้จริง
+    print(f"GEMINI ERROR DEBUG: {e}")
+    
     error_str = str(e)
     if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
       selected_msg = random.choice(quota_out_messages)
       await message.channel.send(selected_msg)
     else:
-      # กรณีเกิดข้อผิดพลาดอื่นๆ
-      await message.channel.send(
-          "(ทำหน้าเลิกลั่ก)\n"
-          '"อุ๊ย ระบบรวนนิดหน่อย พี่ลองพูดใหม่อีกทีซิ!"'
-      )
+      # ส่งข้อความบอก Error ดิบๆ กลับมาในแชท Discord ชั่วคราว เพื่อเราจะได้รู้ว่าติดปัญหาอะไรกันแน่
+      await message.channel.send(f"(ทำหน้าเลิกลั่ก)\nพิมพ์บอกพี่: เกิดข้อผิดพลาดตัวนี้จ้า -> `{e}`")
 
 
 # ดึง Token จาก Environment Variables บน Render อัตโนมัติ
