@@ -83,5 +83,5 @@ async def on_message(message):
   await bot.process_commands(message)
 
 
-# บรรทัดรันบอทใส่ Token ใหม่ล่าสุดแบบถูกต้อง
+# บรรทัดรันบอทใส่ Token แบบครบถ้วนสมบูรณ์
 bot.run("MTU0ODMyMTU0MzE3MDMwMjA3OA.GP7rcw.TFHYqso5tayw3HLct1j7mYJohfNdRGU0M71XMg")
