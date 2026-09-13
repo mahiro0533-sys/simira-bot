@@ -83,5 +83,5 @@ async def on_message(message):
   await bot.process_commands(message)
 
 
-# บรรทัดรันบอทใส่ Token จริงของพี่แบบถูกต้องสมบูรณ์
-bot.run("MTU0ODMyMTU0MzE3MDMwMjA3OA.GvBote.MMaFpDJgeAHc-tOMVi2YZEq9-qt--nxniSgoQo")
+# บรรทัดรันบอทใส่ Token ใหม่ล่าสุดแบบสะอาดเรียบร้อย
+bot.run("MTU0ODMyMTU0MzE3MDMwMjA3OA.GJSgLe.XzZtW1VqXLzCt-cPP7pOzsN72DqgmAP-t1kjss")
