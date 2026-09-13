@@ -79,7 +79,7 @@ async def on_message(message):
   # ถ้าห้องนี้ยังไม่มีเซสชันการคุย ให้สร้างใหม่พร้อมใส่ System Instruction
   if channel_id not in chat_sessions:
     chat_sessions[channel_id] = client.chats.create(
-        model="gemini-2.5-flash",
+        model="gemini-2.0-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
