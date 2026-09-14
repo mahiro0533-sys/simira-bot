@@ -29,7 +29,7 @@ from google.genai import types
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
+# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
 กฎในการตอบ:
@@ -61,8 +61,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-chat_sessions = {}
-
 @bot.event
 async def on_ready():
   print(f"น้องซีมิระออนไลน์แล้วจ้า! (Logged in as {bot.user})")
@@ -76,32 +74,24 @@ async def on_message(message):
   if message.channel.id != 1548756984885682346:
     return
 
-  channel_id = message.channel.id
+  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-  # ใช้รุ่น gemini-2.5-flash ที่มีความเสถียรสูงในการเรียกใช้งานผ่าน API
-  if channel_id not in chat_sessions:
-    chat_sessions[channel_id] = client.chats.create(
+  try:
+    # เรียกใช้งานผ่านโมเดลโดยตรงด้วย gemini-2.5-flash ที่มีความเสถียรสูงสุด
+    response = client.models.generate_content(
         model="gemini-2.5-flash",
+        contents=message.content,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
         ),
     )
-
-  chat = chat_sessions[channel_id]
-  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
-
-  try:
-    response = chat.send_message(message.content)
     if response and response.text:
         await thinking_msg.edit(content=response.text)
     else:
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
   except Exception as e:
     print(f"Error occurred: {e}")
-    # หากเกิด Error ฝั่ง API ให้ล้างเซสชันห้องนั้นทิ้งเพื่อให้รอบหน้าสร้างใหม่ได้ถูกต้อง
-    if channel_id in chat_sessions:
-        del chat_sessions[channel_id]
     await thinking_msg.edit(content=random.choice(error_phrases))
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
