@@ -78,7 +78,7 @@ async def on_message(message):
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # แก้ไขชื่อโมเดลให้ถูกต้องตามมาตรฐาน SDK ตัวใหม่ (ใช้ gemini-2.5-flash)
+    # เรียกใช้งานผ่าน Client ตามโครงสร้างที่ถูกต้องของ SDK ตัวใหม่
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=message.content,
@@ -87,13 +87,16 @@ async def on_message(message):
             temperature=0.9,
         ),
     )
-    if response and response.text:
+    
+    # ตรวจสอบผลลัพธ์และแก้ไขข้อความ
+    if response and hasattr(response, 'text') and response.text:
         await thinking_msg.edit(content=response.text)
     else:
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+        
   except Exception as e:
     print(f"Error occurred: {e}")
-    # ถ้าเกิด Error จะเปลี่ยนข้อความรอนั้นให้กลายเป็นประโยคสุ่มไล่กวนๆ ทันที
+    # หากเกิดข้อผิดพลาด ให้เปลี่ยนเป็นข้อความกวนๆ ตามที่กำหนด
     await thinking_msg.edit(content=random.choice(error_phrases))
 
 # ดึง Token จาก Environment Variable ของ Render
