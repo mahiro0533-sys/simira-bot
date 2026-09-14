@@ -53,7 +53,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"น้องซีมิระออนไลน์และเสถียรแล้วจ้า! (Logged in as {bot.user})")
+    print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
 
 @bot.event
 async def on_message(message):
@@ -71,7 +71,7 @@ async def on_message(message):
     thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
     try:
-        # ใช้โมเดล gemini-2.5-flash ที่เสถียรและรองรับปัจจุบัน
+        # ใช้โมเดลมาตรฐานที่รองรับแน่นอน
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=message.content,
@@ -88,14 +88,10 @@ async def on_message(message):
             await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
             
     except Exception as e:
-        # ระบบจัดการ Error แบบปลอดภัย ไม่ทำให้บอทค้าง
         error_msg = str(e)
         print(f"DEBUG ERROR: {error_msg}")
-        
-        if "404" in error_msg or "NOT_FOUND" in error_msg:
-            await thinking_msg.edit(content='(กอดอกมองค้อน)\n"พี่คะ ช่องสัญญาณสมองหนู (Model) กำลังปรับปรุง เดี๋ยวเราลองคุยกันใหม่นะ!"')
-        else:
-            await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
+        # ปริ้นท์ Error แบบละเอียดให้เห็นใน Render Logs เผื่อเช็คเพิ่ม
+        await thinking_msg.edit(content=f'(กอดอกมองค้อน)\n"ติดปัญหาอันนี้แหละพี่: {error_msg[:100]}"')
 
 # ดึง Token เชื่อมต่อ Discord
 TOKEN = os.environ.get("DISCORD_TOKEN")
