@@ -98,10 +98,9 @@ async def on_message(message):
       selected_msg = random.choice(quota_out_messages)
       await message.channel.send(selected_msg)
     else:
-      # กรณีเกิดข้อผิดพลาดอื่นๆ
+      # [แก้ไขจุดนี้] ให้พ่น Error จริงออกมาโชว์ในแชท จะได้รู้ว่าติดขัดตรงไหนกันแน่
       await message.channel.send(
-          "(ทำหน้าเลิกลั่ก)\n"
-          '"อุ๊ย ระบบรวนนิดหน่อย พี่ลองพูดใหม่อีกทีซิ!"'
+          f"(ทำหน้าเลิกลั่กสุดขีด)\nพังตรงนี้เว้ยพี่: `{e}`"
       )
 
 
