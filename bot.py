@@ -29,7 +29,7 @@ from google.genai import types
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ
+# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
 กฎในการตอบ:
@@ -40,7 +40,7 @@ SYSTEM_INSTRUCTION = """
 5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
-# รายการข้อความสุ่มตอนกำลังอ่านหรือคิดคำตอบ
+# รายการข้อความสุ่มตอนกำลังอ่านหรือคิดคำตอบ พร้อมใส่อีโมจิประกอบ (พี่สามารถเปลี่ยนเป็น Custom Emoji ของเซิร์ฟเวอร์ตัวเองได้ครับ)
 thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
     '🔄 (เอียงคอสงสัย)\n"อืม... ประโยคนี้หมายความว่าไงนะ? ขอคิดดูก่อนแป๊บหนึ่ง!"',
@@ -48,7 +48,7 @@ thinking_phrases = [
     '✨ (หรี่ตามองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
-# รายการประโยคสุ่มเวลาเกิด Error
+# รายการประโยคสุ่มเวลาเกิด Error หรือระบบหนาแน่น
 error_phrases = [
     '(ทำหน้าบึ้งใส่)\n"เซิร์ฟเวอร์งอแงใส่อีกแล้วอ่ะ! ไปไกลๆ เลยนะพี่ อย่ามาเซ้าซี้ตอนหนูอารมณ์ไม่ดี!"',
     '(กอดอกเชิดหน้า)\n"สมองหนูช็อตชั่วคราว... ไว้ค่อยมาคุยใหม่ตอนที่พี่ว่างหรือตอนที่ระบบมันใจดีกับหนูนะ!"',
@@ -61,6 +61,9 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# เก็บเซสชันการคุยแยกตามห้อง
+chat_sessions = {}
+
 @bot.event
 async def on_ready():
   print(f"น้องซีมิระออนไลน์แล้วจ้า! (Logged in as {bot.user})")
@@ -70,30 +73,41 @@ async def on_message(message):
   if message.author == bot.user:
     return
 
-  # ล็อกให้ทำงานเฉพาะห้อง ID ที่กำหนดไว้ห้องเดียวเท่านั้น
+  # จำกัดให้น้องทำงานและตอบเฉพาะห้อง ID นี้ห้องเดียวเท่านั้น
   if message.channel.id != 1548756984885682346:
     return
 
-  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+  channel_id = message.channel.id
 
-  try:
-    # แก้ไขจุดเรียกใช้งานโมเดลให้เสถียรและถูกต้องตามมาตรฐานของ google-genai
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=message.content,
+  # ถ้าห้องนี้ยังไม่มีเซสชันการคุย ให้สร้างใหม่ด้วยรุ่น gemini-3.6-flash ที่อัปเดตแล้ว
+  if channel_id not in chat_sessions:
+    chat_sessions[channel_id] = client.chats.create(
+        model="gemini-3.6-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
         ),
     )
+
+  chat = chat_sessions[channel_id]
+
+  # ส่งข้อความสุ่มพร้อมอีโมจิรอก่อน เพื่อแจ้งให้รู้ว่าน้องกำลังอ่าน/คิดอยู่
+  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+
+  try:
+    # ส่งข้อความไปคุยกับ Gemini
+    response = chat.send_message(message.content)
     if response and response.text:
+        # แก้ไขข้อความจากตอนแรกให้กลายเป็นคำตอบจริงจากบอท
         await thinking_msg.edit(content=response.text)
     else:
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
   except Exception as e:
     print(f"Error occurred: {e}")
+    # ถ้าเกิด Error จะเปลี่ยนข้อความรอนั้นให้กลายเป็นประโยคสุ่มไล่กวนๆ ทันที
     await thinking_msg.edit(content=random.choice(error_phrases))
 
+# ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
