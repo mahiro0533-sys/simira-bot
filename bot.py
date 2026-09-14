@@ -3,7 +3,7 @@ import random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
-# --- โค้ดหลอกพอร์ต Render ของเดิม (รักษาสถานะออนไลน์) ---
+# --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -18,18 +18,18 @@ def run_server():
 server_thread = Thread(target=run_server)
 server_thread.daemon = True
 server_thread.start()
-# -------------------------------------------------------------
+# ------------------------------------
 
 import discord
 from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# ดึง API Key จาก Environment Variables ของ Render โดยตรง
+# ดึงค่า API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ
+# ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
 กฎในการตอบ:
@@ -40,7 +40,6 @@ SYSTEM_INSTRUCTION = """
 5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
-# รายการข้อความสุ่มตอนกำลังอ่านหรือคิดคำตอบ
 thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
     '🔄 (เอียงคอสงสัย)\n"อืม... ประโยคนี้หมายความว่าไงนะ? ขอคิดดูก่อนแป๊บหนึ่ง!"',
@@ -54,45 +53,51 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-  print(f"น้องซีมิระออนไลน์แล้วจ้า! (Logged in as {bot.user})")
+    print(f"น้องซีมิระออนไลน์และเสถียรแล้วจ้า! (Logged in as {bot.user})")
 
 @bot.event
 async def on_message(message):
-  if message.author == bot.user:
-    return
+    if message.author == bot.user:
+        return
 
-  # จำกัดให้น้องทำงานและตอบเฉพาะห้อง ID นี้ห้องเดียวเท่านั้น
-  if message.channel.id != 1548756984885682346:
-    return
+    # กรองเฉพาะห้องที่กำหนด
+    if message.channel.id != 1548756984885682346:
+        return
 
-  if not message.content or not message.content.strip():
-    return
+    if not message.content or not message.content.strip():
+        return
 
-  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+    # ส่งข้อความกำลังคิด
+    thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-  try:
-    # อัปเดตชื่อโมเดลเป็น gemini-2.5-flash ที่รองรับในปัจจุบัน
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=message.content,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.9,
-            tools=[],
+    try:
+        # ใช้โมเดล gemini-2.5-flash ที่เสถียรและรองรับปัจจุบัน
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=message.content,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.9,
+                tools=[],
+            )
         )
-    )
-    
-    if response and hasattr(response, 'text') and response.text:
-        await thinking_msg.edit(content=response.text)
-    else:
-        await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
         
-  except Exception as e:
-    print(f"DETAILED ERROR: {e}")
-    # เปลี่ยนกลับมาเป็นข้อความกวนๆ ตามเดิม เมื่อแก้ปัญหาโมเดลได้แล้ว
-    await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
+        if response and hasattr(response, 'text') and response.text:
+            await thinking_msg.edit(content=response.text)
+        else:
+            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+            
+    except Exception as e:
+        # ระบบจัดการ Error แบบปลอดภัย ไม่ทำให้บอทค้าง
+        error_msg = str(e)
+        print(f"DEBUG ERROR: {error_msg}")
+        
+        if "404" in error_msg or "NOT_FOUND" in error_msg:
+            await thinking_msg.edit(content='(กอดอกมองค้อน)\n"พี่คะ ช่องสัญญาณสมองหนู (Model) กำลังปรับปรุง เดี๋ยวเราลองคุยกันใหม่นะ!"')
+        else:
+            await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
 
-# ดึง Token จาก Environment Variable ของ Render
+# ดึง Token เชื่อมต่อ Discord
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
