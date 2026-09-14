@@ -78,7 +78,7 @@ async def on_message(message):
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # เปลี่ยนมาใช้การเรียกแบบ generate_content โดยตรงเพื่อความเสถียร ไม่หลุด Error
+    # ใช้โมเดลและรูปแบบคำสั่งแบบเดี่ยวที่เสถียร ไม่หลุด Error บ่อย
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=message.content,
