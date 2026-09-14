@@ -25,8 +25,8 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# 1. API Key ของคุณ (ให้นำคีย์ปกติที่ขึ้นต้นด้วย AIzaSy... มาใส่ตรงนี้แบบเดี่ยวๆ ห้ามมีคำอื่นปนเปื้อนครับ)
-GEMINI_API_KEY = "ใส่คีย์_AIzaSy_ของคุณตรงนี้"
+# 1. API Key ของคุณ (เอาคีย์แท้ AIzaSy... ของพี่มาใส่ในเครื่องหมายคำพูดตรงนี้แทนที่เดิมให้หมดครับ)
+GEMINI_API_KEY = "AIzaSy..." # <--- ใส่คีย์จริงของพี่ตรงนี้ (ห้ามมีข้อความอื่นปน)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
@@ -86,7 +86,7 @@ async def on_message(message):
 
   chat = chat_sessions[channel_id]
 
-  # ส่งข้อความไปคุยกับ Gemini แบบต่อเนื่องโดยตรง (ตัดบล็อกดัก Error ตัวที่ทำให้พูดซ้ำซากออกแล้ว)
+  # ส่งข้อความคุยกับ Gemini แบบปกติ (ไม่มีลูปพูดซ้ำกวนใจแล้ว)
   response = chat.send_message(message.content)
   await message.channel.send(response.text)
 
