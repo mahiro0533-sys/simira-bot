@@ -25,8 +25,8 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# 1. API Key ของคุณ (แก้ไขรูปแบบที่เกินมาให้ถูกต้องสมบูรณ์แล้ว)
-GEMINI_API_KEY = "AQ.Ab8RN6LbjwZYAfOQEqxJM8RFm5483HsOLGxsCf7tz1Po0QIF6g"
+# 1. API Key ของคุณ (ให้นำคีย์ปกติที่ขึ้นต้นด้วย AIzaSy... มาใส่ตรงนี้แบบเดี่ยวๆ ห้ามมีคำอื่นปนเปื้อนครับ)
+GEMINI_API_KEY = "ใส่คีย์_AIzaSy_ของคุณตรงนี้"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
@@ -98,13 +98,14 @@ async def on_message(message):
       selected_msg = random.choice(quota_out_messages)
       await message.channel.send(selected_msg)
     else:
-      # [แก้ไขจุดนี้] ให้พ่น Error จริงออกมาโชว์ในแชท จะได้รู้ว่าติดขัดตรงไหนกันแน่
+      # กรณีเกิดข้อผิดพลาดอื่นๆ กลับมาใช้ประโยคกวนๆ ตามเดิม
       await message.channel.send(
-          f"(ทำหน้าเลิกลั่กสุดขีด)\nพังตรงนี้เว้ยพี่: `{e}`"
+          "(ทำหน้าเลิกลั่ก)\n"
+          '"อุ๊ย ระบบรวนนิดหน่อย พี่ลองพูดใหม่อีกทีซิ!"'
       )
 
 
-# ดึง Token จาก Environment Variable ของ Render เพื่อความปลอดภัย (หรือใส่แทนที่เครื่องหมายคำพูดถ้าต้องการใช้แบบตรงๆ)
+# ดึง Token จาก Environment Variable ของ Render เพื่อความปลอดภัย
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
