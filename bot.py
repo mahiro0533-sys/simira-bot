@@ -71,14 +71,14 @@ async def on_message(message):
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # ปิดการใช้งาน Automatic Function Calling (AFC) โดยกำหนด tools เป็น None หรือลิสต์ว่าง เพื่อป้องกัน Error หลุดเข้า except
+    # อัปเดตชื่อโมเดลเป็น gemini-2.5-flash ที่รองรับในปัจจุบัน
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=message.content,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
-            tools=[],  # ปิดการเรียกฟังก์ชันอัตโนมัติเพื่อตัดปัญหา Warning
+            tools=[],
         )
     )
     
@@ -89,8 +89,8 @@ async def on_message(message):
         
   except Exception as e:
     print(f"DETAILED ERROR: {e}")
-    # แสดง Error จริงๆ ออกมาในแชท เพื่อเช็คว่าติดปัญหาอะไรกันแน่
-    await thinking_msg.edit(content=f'(เกิดข้อผิดพลาด: {str(e)})')
+    # เปลี่ยนกลับมาเป็นข้อความกวนๆ ตามเดิม เมื่อแก้ปัญหาโมเดลได้แล้ว
+    await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
 
 # ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
