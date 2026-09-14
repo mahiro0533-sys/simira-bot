@@ -71,7 +71,7 @@ async def on_message(message):
     thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
     try:
-        # ใช้โมเดลมาตรฐานที่รองรับแน่นอน
+        # แก้ไขชื่อโมเดลให้ถูกต้องตามมาตรฐานปัจจุบัน
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=message.content,
@@ -90,7 +90,6 @@ async def on_message(message):
     except Exception as e:
         error_msg = str(e)
         print(f"DEBUG ERROR: {error_msg}")
-        # ปริ้นท์ Error แบบละเอียดให้เห็นใน Render Logs เผื่อเช็คเพิ่ม
         await thinking_msg.edit(content=f'(กอดอกมองค้อน)\n"ติดปัญหาอันนี้แหละพี่: {error_msg[:100]}"')
 
 # ดึง Token เชื่อมต่อ Discord
