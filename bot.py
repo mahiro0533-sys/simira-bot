@@ -24,8 +24,8 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# ⚠️ สำคัญมาก: เอาคีย์จริงของพี่มาวางแทนที่ข้อความข้างล่างนี้ทั้งหมด (ลบเครื่องหมายจุดไข่ปลาออกให้หมด)
-GEMINI_API_KEY = "ใส่คีย์จริงของพี่ตรงนี้" 
+# ดึง API Key จาก Environment Variables ของ Render โดยตรง (ปลอดภัยและไม่มีปัญหาภาษาไทย)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
