@@ -24,7 +24,7 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# ดึง API Key จาก Environment Variables ของ Render โดยตรง (ปลอดภัยและไม่มีปัญหาภาษาไทย)
+# ดึง API Key จาก Environment Variables ของ Render โดยตรง
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -57,10 +57,10 @@ async def on_message(message):
 
   channel_id = message.channel.id
 
-  # ถ้าห้องนี้ยังไม่มีเซสชันการคุย ให้สร้างใหม่ด้วย client.chats.create แบบถูกต้อง
+  # ถ้าห้องนี้ยังไม่มีเซสชันการคุย ให้สร้างใหม่ด้วยรุ่น gemini-3.6-flash ที่อัปเดตแล้ว
   if channel_id not in chat_sessions:
     chat_sessions[channel_id] = client.chats.create(
-        model="gemini-2.0-flash",
+        model="gemini-3.6-flash",
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
@@ -70,7 +70,7 @@ async def on_message(message):
   chat = chat_sessions[channel_id]
 
   try:
-    # ส่งข้อความไปคุยกับ Gemini แบบสตรีมหรือส่งตรง
+    # ส่งข้อความไปคุยกับ Gemini
     response = chat.send_message(message.content)
     if response and response.text:
         await message.channel.send(response.text)
@@ -80,7 +80,7 @@ async def on_message(message):
     print(f"Error occurred: {e}")
     await message.channel.send(f'(ทำหน้าเลิกลั่ก)\n"พังตรงนี้เว้ยพี่: {str(e)}"')
 
-# ดึง Token จาก Environment Variable ของ Render เพื่อความปลอดภัย
+# ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
