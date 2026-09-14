@@ -73,6 +73,10 @@ async def on_message(message):
   if message.author == bot.user:
     return
 
+  # ล็อกให้ทำงานเฉพาะห้อง ID ที่กำหนดไว้ห้องเดียวเท่านั้น
+  if message.channel.id != 1548756984885682346:
+    return
+
   channel_id = message.channel.id
 
   # ถ้าห้องนี้ยังไม่มีเซสชันการคุย ให้สร้างใหม่ด้วยรุ่น gemini-3.6-flash ที่อัปเดตแล้ว
