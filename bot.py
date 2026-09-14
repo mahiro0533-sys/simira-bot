@@ -89,7 +89,8 @@ async def on_message(message):
         
   except Exception as e:
     print(f"DETAILED ERROR: {e}")
-    await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
+    # แสดง Error จริงๆ ออกมาในแชท เพื่อเช็คว่าติดปัญหาอะไรกันแน่
+    await thinking_msg.edit(content=f'(เกิดข้อผิดพลาด: {str(e)})')
 
 # ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
