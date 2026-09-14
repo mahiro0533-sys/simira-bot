@@ -29,7 +29,7 @@ from google.genai import types
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ และขำรสสนทนาต่อเนื่อง
+# ปรับ System Instruction ให้ตอบสั้นกระชับ ตบมุกโป๊ะเป๊ะ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
 กฎในการตอบ:
@@ -48,27 +48,9 @@ thinking_phrases = [
     '✨ (หรี่ตามองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
-# รายการประโยคสุ่มเวลาเกิด Error หรือระบบหนาแน่น
-error_phrases = [
-    '(ทำหน้าบึ้งใส่)\n"เซิร์ฟเวอร์งอแงใส่อีกแล้วอ่ะ! ไปไกลๆ เลยนะพี่ อย่ามาเซ้าซี้ตอนหนูอารมณ์ไม่ดี!"',
-    '(กอดอกเชิดหน้า)\n"สมองหนูช็อตชั่วคราว... ไว้ค่อยมาคุยใหม่ตอนที่พี่ว่างหรือตอนที่ระบบมันใจดีกับหนูนะ!"',
-    '(ทำตาขวางใส่)\n"อะไรเนี่ย! จู่ๆ ก็เออเรอร์ใส่... ไปไกลๆ เลยนะคนกวนประสาท!"',
-    '(ถอนหายใจแรงๆ)\n"หนูไม่เข้าใจที่พี่พูดหรอกนะ! ไปตั้งสติแล้วค่อยกลับมาคุยกันใหม่เลยป่ะ!"',
-    '(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... มึนหัวตึ้บเลย ระบบมันรวนไปหมดแล้วเนี่ย อย่าเพิ่งกวนได้ป่ะ!"'
-]
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
-
-# สร้าง Chat Session กลางไว้สำหรับคุยต่อเนื่องตามที่ SDK แนะนำอย่างเป็นทางการ
-chat_session = client.chats.create(
-    model="gemini-2.0-flash",
-    config=types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTION,
-        temperature=0.9,
-    )
-)
 
 @bot.event
 async def on_ready():
@@ -87,8 +69,17 @@ async def on_message(message):
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # ส่งข้อความผ่านแชทเซสชันโดยตรง ปลอดภัย ไร้ปัญหาเรื่อง AFC Warning
-    response = chat_session.send_message(message.content)
+    # สร้างแชทเซสชันใหม่แบบสดๆ ต่อข้อความ เพื่อป้องกันอาการค้างหรือพังของสเตตัสเก่า
+    chat = client.chats.create(
+        model="gemini-2.0-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            temperature=0.9,
+        )
+    )
+    
+    # ส่งข้อความผ่านแชทเซสชันที่สร้างขึ้นใหม่
+    response = chat.send_message(message.content)
     
     if response and hasattr(response, 'text') and response.text:
         await thinking_msg.edit(content=response.text)
@@ -96,9 +87,10 @@ async def on_message(message):
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
         
   except Exception as e:
-    print(f"Error occurred: {e}")
-    # หากเกิดข้อผิดพลาด ให้เปลี่ยนเป็นข้อความกวนๆ ตามที่กำหนด
-    await thinking_msg.edit(content=random.choice(error_phrases))
+    # พิมพ์ Log ข้อผิดพลาดจริงลงใน Console เพื่อให้เห็นชัดๆ ว่าพังเพราะอะไร
+    print(f"DETAILED ERROR: {e}")
+    # ปรับข้อความ Error ให้ซอฟต์ลงและบอกใบ้ว่าระบบกำลังปรับตัว
+    await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
 
 # ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
