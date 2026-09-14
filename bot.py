@@ -86,23 +86,9 @@ async def on_message(message):
 
   chat = chat_sessions[channel_id]
 
-  try:
-    # ส่งข้อความไปคุยกับ Gemini แบบต่อเนื่อง
-    response = chat.send_message(message.content)
-    await message.channel.send(response.text)
-
-  except Exception as e:
-    # ตรวจสอบว่าถ้าโควต้าเต็ม (Quota Exceeded) ให้สุ่มประโยคฮาๆ ออกมาตอบแทน
-    error_str = str(e)
-    if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-      selected_msg = random.choice(quota_out_messages)
-      await message.channel.send(selected_msg)
-    else:
-      # กรณีเกิดข้อผิดพลาดอื่นๆ กลับมาใช้ประโยคกวนๆ ตามเดิม
-      await message.channel.send(
-          "(ทำหน้าเลิกลั่ก)\n"
-          '"อุ๊ย ระบบรวนนิดหน่อย พี่ลองพูดใหม่อีกทีซิ!"'
-      )
+  # ส่งข้อความไปคุยกับ Gemini แบบต่อเนื่องโดยตรง (ตัดบล็อกดัก Error ตัวที่ทำให้พูดซ้ำซากออกแล้ว)
+  response = chat.send_message(message.content)
+  await message.channel.send(response.text)
 
 
 # ดึง Token จาก Environment Variable ของ Render เพื่อความปลอดภัย
