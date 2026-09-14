@@ -61,6 +61,15 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# สร้าง Chat Session กลางไว้สำหรับคุยต่อเนื่องตามที่ SDK แนะนำอย่างเป็นทางการ
+chat_session = client.chats.create(
+    model="gemini-2.0-flash",
+    config=types.GenerateContentConfig(
+        system_instruction=SYSTEM_INSTRUCTION,
+        temperature=0.9,
+    )
+)
+
 @bot.event
 async def on_ready():
   print(f"น้องซีมิระออนไลน์แล้วจ้า! (Logged in as {bot.user})")
@@ -78,17 +87,9 @@ async def on_message(message):
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # เรียกใช้งานผ่าน Client ตามโครงสร้างที่ถูกต้องของ SDK ตัวใหม่
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=message.content,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.9,
-        ),
-    )
+    # ส่งข้อความผ่านแชทเซสชันโดยตรง ปลอดภัย ไร้ปัญหาเรื่อง AFC Warning
+    response = chat_session.send_message(message.content)
     
-    # ตรวจสอบผลลัพธ์และแก้ไขข้อความ
     if response and hasattr(response, 'text') and response.text:
         await thinking_msg.edit(content=response.text)
     else:
