@@ -1,4 +1,5 @@
 import os
+import random
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
@@ -39,6 +40,23 @@ SYSTEM_INSTRUCTION = """
 5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
+# รายการข้อความสุ่มตอนกำลังอ่านหรือคิดคำตอบ พร้อมใส่อีโมจิประกอบ (พี่สามารถเปลี่ยนเป็น Custom Emoji ของเซิร์ฟเวอร์ตัวเองได้ครับ)
+thinking_phrases = [
+    '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
+    '🔄 (เอียงคอสงสัย)\n"อืม... ประโยคนี้หมายความว่าไงนะ? ขอคิดดูก่อนแป๊บหนึ่ง!"',
+    '💬 (กอดอกพึมพำ)\n"แป๊บนะพี่ กำลังประมวลผลความกวนของพี่อยู่..."',
+    '✨ (หรี่ตามองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
+]
+
+# รายการประโยคสุ่มเวลาเกิด Error หรือระบบหนาแน่น
+error_phrases = [
+    '(ทำหน้าบึ้งใส่)\n"เซิร์ฟเวอร์งอแงใส่อีกแล้วอ่ะ! ไปไกลๆ เลยนะพี่ อย่ามาเซ้าซี้ตอนหนูอารมณ์ไม่ดี!"',
+    '(กอดอกเชิดหน้า)\n"สมองหนูช็อตชั่วคราว... ไว้ค่อยมาคุยใหม่ตอนที่พี่ว่างหรือตอนที่ระบบมันใจดีกับหนูนะ!"',
+    '(ทำตาขวางใส่)\n"อะไรเนี่ย! จู่ๆ ก็เออเรอร์ใส่... ไปไกลๆ เลยนะคนกวนประสาท!"',
+    '(ถอนหายใจแรงๆ)\n"หนูไม่เข้าใจที่พี่พูดหรอกนะ! ไปตั้งสติแล้วค่อยกลับมาคุยกันใหม่เลยป่ะ!"',
+    '(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... มึนหัวตึ้บเลย ระบบมันรวนไปหมดแล้วเนี่ย อย่าเพิ่งกวนได้ป่ะ!"'
+]
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -69,16 +87,21 @@ async def on_message(message):
 
   chat = chat_sessions[channel_id]
 
+  # ส่งข้อความสุ่มพร้อมอีโมจิรอก่อน เพื่อแจ้งให้รู้ว่าน้องกำลังอ่าน/คิดอยู่
+  thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+
   try:
     # ส่งข้อความไปคุยกับ Gemini
     response = chat.send_message(message.content)
     if response and response.text:
-        await message.channel.send(response.text)
+        # แก้ไขข้อความจากตอนแรกให้กลายเป็นคำตอบจริงจากบอท
+        await thinking_msg.edit(content=response.text)
     else:
-        await message.channel.send('(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+        await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่อยอก เอาใหม่อีกทีนะพี่!"')
   except Exception as e:
     print(f"Error occurred: {e}")
-    await message.channel.send(f'(ทำหน้าเลิกลั่ก)\n"พังตรงนี้เว้ยพี่: {str(e)}"')
+    # ถ้าเกิด Error จะเปลี่ยนข้อความรอนั้นให้กลายเป็นประโยคสุ่มไล่กวนๆ ทันที
+    await thinking_msg.edit(content=random.choice(error_phrases))
 
 # ดึง Token จาก Environment Variable ของ Render
 TOKEN = os.environ.get("DISCORD_TOKEN")
