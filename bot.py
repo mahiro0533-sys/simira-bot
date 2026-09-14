@@ -65,21 +65,20 @@ async def on_message(message):
   if message.channel.id != 1548756984885682346:
     return
 
-  # [จุดสำคัญที่แก้ปัญหา] ถ้าข้อความว่างเปล่า (เช่น ส่งรูปภาพ สติ๊กเกอร์ หรือไฟล์แนบ) ให้ข้ามทันที ไม่เรียก API ให้พัง
   if not message.content or not message.content.strip():
     return
 
-  # ส่งข้อความสุ่มรอก่อน เพื่อแจ้งให้รู้ว่าน้องกำลังอ่าน/คิดอยู่
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # ใช้ client.models.generate_content ซึ่งเสถียรและรองรับ Config สมบูรณ์แบบที่สุด
+    # ปิดการใช้งาน Automatic Function Calling (AFC) โดยกำหนด tools เป็น None หรือลิสต์ว่าง เพื่อป้องกัน Error หลุดเข้า except
     response = client.models.generate_content(
         model="gemini-2.0-flash",
         contents=message.content,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
+            tools=[],  # ปิดการเรียกฟังก์ชันอัตโนมัติเพื่อตัดปัญหา Warning
         )
     )
     
@@ -89,7 +88,6 @@ async def on_message(message):
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
         
   except Exception as e:
-    # พิมพ์ Log ข้อผิดพลาดจริงลงใน Console เพื่อให้ตรวจสอบได้ง่าย
     print(f"DETAILED ERROR: {e}")
     await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
 
