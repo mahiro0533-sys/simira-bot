@@ -65,21 +65,23 @@ async def on_message(message):
   if message.channel.id != 1548756984885682346:
     return
 
+  # [จุดสำคัญที่แก้ปัญหา] ถ้าข้อความว่างเปล่า (เช่น ส่งรูปภาพ สติ๊กเกอร์ หรือไฟล์แนบ) ให้ข้ามทันที ไม่เรียก API ให้พัง
+  if not message.content or not message.content.strip():
+    return
+
   # ส่งข้อความสุ่มรอก่อน เพื่อแจ้งให้รู้ว่าน้องกำลังอ่าน/คิดอยู่
   thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
   try:
-    # สร้างแชทเซสชันใหม่แบบสดๆ ต่อข้อความ เพื่อป้องกันอาการค้างหรือพังของสเตตัสเก่า
-    chat = client.chats.create(
+    # ใช้ client.models.generate_content ซึ่งเสถียรและรองรับ Config สมบูรณ์แบบที่สุด
+    response = client.models.generate_content(
         model="gemini-2.0-flash",
+        contents=message.content,
         config=types.GenerateContentConfig(
             system_instruction=SYSTEM_INSTRUCTION,
             temperature=0.9,
         )
     )
-    
-    # ส่งข้อความผ่านแชทเซสชันที่สร้างขึ้นใหม่
-    response = chat.send_message(message.content)
     
     if response and hasattr(response, 'text') and response.text:
         await thinking_msg.edit(content=response.text)
@@ -87,9 +89,8 @@ async def on_message(message):
         await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
         
   except Exception as e:
-    # พิมพ์ Log ข้อผิดพลาดจริงลงใน Console เพื่อให้เห็นชัดๆ ว่าพังเพราะอะไร
+    # พิมพ์ Log ข้อผิดพลาดจริงลงใน Console เพื่อให้ตรวจสอบได้ง่าย
     print(f"DETAILED ERROR: {e}")
-    # ปรับข้อความ Error ให้ซอฟต์ลงและบอกใบ้ว่าระบบกำลังปรับตัว
     await thinking_msg.edit(content='(กอดอกมองค้อน)\n"เมื่อกี้สมองหนูสะดุดนิดหน่อย... ไหนลองทักมาใหม่อีกรอบซิพี่!"')
 
 # ดึง Token จาก Environment Variable ของ Render
