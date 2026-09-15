@@ -39,17 +39,20 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- ระบบสแกนหาชื่อโมเดลแฟลชรุ่นล่าสุดอัตโนมัติ ---
+# --- ระบบอัปเดตโมเดลอัตโนมัติ (Dynamic Model Fetcher) ---
 def get_latest_flash_model():
     try:
+        # วิ่งไปเช็ครายชื่อโมเดลรุ่นล่าสุดจากระบบ Google แบบเรียลไทม์
         for m in client.models.list():
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 model_id = m.name.replace("models/", "")
                 return model_id
     except Exception as e:
         print(f"Auto-detect model error: {e}")
-    return "gemini-2.5-flash" # ตัวสำรองกรณีฉุกเฉิน
-# -----------------------------------------------
+    
+    # ตัวสำรองฉุกเฉินปรับเป็นเวอร์ชันล่าสุด
+    return "gemini-3.5-flash"
+# --------------------------------------------------------
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
@@ -94,8 +97,9 @@ async def on_message(message):
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         try:
-            # ดึงชื่อโมเดลล่าสุดมาใช้งานแบบอัปโตโนมัติทันที
+            # เรียกใช้งานฟังก์ชันดึงโมเดลรุ่นล่าสุดอัตโนมัติ
             current_model = get_latest_flash_model()
+            print(f"Using Model: {current_model}")
 
             response = client.models.generate_content(
                 model=current_model,
