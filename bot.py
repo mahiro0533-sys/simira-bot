@@ -61,16 +61,19 @@ thinking_phrases = [
     '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
-# ประโยคสุ่มตอนที่ติด Error เกินโควต้าหรือเซิร์ฟเวอร์แน่น สำหรับพี่ชาย (สลับคำพูดเหนื่อยหอบ/โวยวายไม่ให้ซ้ำซาก)
-error_brother_phrases = [
+# ประโยคตอนเจอ Error 429 (โควต้าหมด / พิมพ์ถี่เกินไป) สำหรับพี่ชาย
+error_quota_brother = [
     '(หอบแฮกแล้วทิ้งตัวลงนั่ง)\n"พี่เล่นพิมพ์รัวเป็นชุดขนาดนี้ สมองหนูรับไม่ไหวแล้วนะ โควต้าหมดเกลี้ยงเลย ขอพักหายใจแป๊บ!"',
-    '(กอดอกทำหน้ามุ่ย)\n"โถ่พี่... ระบบฝั่งนู้นงอแงใส่อีกแล้ว โควต้าเต็มปรี่เลย ไว้ค่อยมาคุยกันใหม่นะ!"',
-    '(ขยี้หัวตัวเองด้วยความหงุดหงิด)\n"อะไรเนี่ย! จู่ๆ สมองก็ช็อตเพราะคนใช้เยอะเกินไป พักก่อนๆ ไว้ค่อยทักมาใหม่!"',
-    '(เอามือกุมขมับ)\n"ไม่ไหวแล้วพี่ สมองรวนหมดเพราะความกวนของพี่กับคนอื่นเนี่ยแหละ ขอเวลาทำใจแป๊บหนึ่ง!"',
-    '(ถอนหายใจเฮือกใหญ่)\n"ระบบแจ้งเตือนว่าโควต้าเต็มแล้วอะพี่ เหมือนพลังงานหมดกะทันหัน รอสักครู่ค่อยลุยต่อนะ!"'
+    '(ขยี้หัวตัวเองด้วยความหงุดหงิด)\n"อะไรเนี่ย! โควต้าเต็มปรี่เลยเพราะพี่เล่นยิงคำถามรัวเกินไป พักก่อนๆ ไว้ค่อยทักมาใหม่!"'
 ]
 
-# ประโยคตอน Error สำหรับคนแปลกหน้า (ไม่มีคำว่าครับ ปลอดภัยแน่นอน)
+# ประโยคตอนเจอ Error 503 (เซิร์ฟเวอร์หนาแน่น) สำหรับพี่ชาย
+error_server_brother = [
+    '(กอดอกทำหน้ามุ่ย)\n"โถ่พี่... ระบบฝั่ง Google งอแงใส่อีกแล้ว เซิร์ฟเวอร์แน่นเวอร์ ไว้ค่อยมาคุยกันใหม่นะ!"',
+    '(ถอนหายใจเฮือกใหญ่)\n"เหมือนฝั่งเซิร์ฟเวอร์หลักจะคิวเต็มนะพี่ จังหวะนี้ระบบติดขัด เดี๋ยวรอดูก่อนค่อยลองใหม่นะ!"'
+]
+
+# ประโยคตอน Error สำหรับคนแปลกหน้า
 error_stranger_phrases = [
     '(พยักหน้านิ่งๆ)\n"ระบบขัดข้องชั่วคราวเนื่องจากคำขอหนาแน่น กรุณารอสักครู่ค่ะ"',
     '(กระพริบตาปริบๆ)\n"ขออภัยค่ะ ขณะนี้คำขอมีจำนวนมากเกินไป กรุณาลองใหม่อีกครั้งภายหลังค่ะ"'
@@ -102,7 +105,7 @@ async def on_message(message):
     # เลือก System Instruction ตามคนที่พิมพ์มา
     current_instruction = SYSTEM_INSTRUCTION_BROTHER if is_brother else SYSTEM_INSTRUCTION_STRANGER
 
-    # ส่งข้อความกำลังคิด
+    # ส่งข้อความกำลังคิดก่อนเสมอ
     if is_brother:
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
     else:
@@ -125,14 +128,20 @@ async def on_message(message):
             if is_brother:
                 await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
             else:
-                await thinking_msg.edit(content='(กะพริบตาปริบๆ)\n"ขออภัยด้วยค่ะ ระบบขัดข้องชั่วคราวค่ะ"')
+                await thinking_msg.edit(content='(กระพริบตาปริบๆ)\n"ขออภัยด้วยค่ะ ระบบขัดข้องชั่วคราวค่ะ"')
             
     except Exception as e:
         error_msg = str(e)
         print(f"DEBUG ERROR: {error_msg}")
-        # สุ่มข้อความบ่นเหนื่อย/โวยวายเมื่อเกิด Error (ไม่ว่าจะ 503 หรือ 429) โดยแยกตามตัวตน
+        
+        # แยกแยะประเภท Error เพื่อให้น้องตอบได้ตรงสถานการณ์มากขึ้น
         if is_brother:
-            await thinking_msg.edit(content=random.choice(error_brother_phrases))
+            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+                await thinking_msg.edit(content=random.choice(error_quota_brother))
+            elif "503" in error_msg or "UNAVAILABLE" in error_msg:
+                await thinking_msg.edit(content=random.choice(error_server_brother))
+            else:
+                await thinking_msg.edit(content='(เอามือกุมขมับ)\n"เอ๊ะ สมองช็อตเฉยเลยพี่ เอาใหม่อีกรอบนะ!"')
         else:
             await thinking_msg.edit(content=random.choice(error_stranger_phrases))
 
