@@ -39,6 +39,18 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# --- ระบบสแกนหาชื่อโมเดลแฟลชรุ่นล่าสุดอัตโนมัติ ---
+def get_latest_flash_model():
+    try:
+        for m in client.models.list():
+            if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
+                model_id = m.name.replace("models/", "")
+                return model_id
+    except Exception as e:
+        print(f"Auto-detect model error: {e}")
+    return "gemini-2.5-flash" # ตัวสำรองกรณีฉุกเฉิน
+# -----------------------------------------------
+
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
@@ -82,9 +94,11 @@ async def on_message(message):
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         try:
-            # ใช้ gemini-2.5-flash โมเดลมาตรฐานปัจจุบันที่รองรับ
+            # ดึงชื่อโมเดลล่าสุดมาใช้งานแบบอัปโตโนมัติทันที
+            current_model = get_latest_flash_model()
+
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=current_model,
                 contents=message.content,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
