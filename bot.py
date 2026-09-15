@@ -1,5 +1,6 @@
 import os
 import random
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
@@ -78,76 +79,3 @@ error_stranger_phrases = [
     '(พยักหน้านิ่งๆ)\n"ระบบขัดข้องชั่วคราวเนื่องจากคำขอหนาแน่น กรุณารอสักครู่ค่ะ"',
     '(กระพริบตาปริบๆ)\n"ขออภัยค่ะ ขณะนี้คำขอมีจำนวนมากเกินไป กรุณาลองใหม่อีกครั้งภายหลังค่ะ"'
 ]
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
-
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    # กรองเฉพาะห้องที่กำหนด
-    if message.channel.id != 1548756984885682346:
-        return
-
-    if not message.content or not message.content.strip():
-        return
-
-    # เช็คว่าเป็นพี่ชายตัวจริงหรือไม่
-    is_brother = (message.author.id == BIG_BROTHER_ID)
-
-    # เลือก System Instruction ตามคนที่พิมพ์มา
-    current_instruction = SYSTEM_INSTRUCTION_BROTHER if is_brother else SYSTEM_INSTRUCTION_STRANGER
-
-    # ส่งข้อความกำลังคิดก่อนเสมอ
-    if is_brother:
-        thinking_msg = await message.channel.send(random.choice(thinking_phrases))
-    else:
-        thinking_msg = await message.channel.send('(มองนิ่งๆ)\n"สักครู่นะคะ กำลังตรวจสอบข้อความอยู่ค่ะ"')
-
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=message.content,
-            config=types.GenerateContentConfig(
-                system_instruction=current_instruction,
-                temperature=0.9,
-                tools=[],
-            )
-        )
-        
-        if response and hasattr(response, 'text') and response.text:
-            await thinking_msg.edit(content=response.text)
-        else:
-            if is_brother:
-                await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
-            else:
-                await thinking_msg.edit(content='(กระพริบตาปริบๆ)\n"ขออภัยด้วยค่ะ ระบบขัดข้องชั่วคราวค่ะ"')
-            
-    except Exception as e:
-        error_msg = str(e)
-        print(f"DEBUG ERROR: {error_msg}")
-        
-        # แยกแยะประเภท Error เพื่อให้น้องตอบได้ตรงสถานการณ์มากขึ้น
-        if is_brother:
-            if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                await thinking_msg.edit(content=random.choice(error_quota_brother))
-            elif "503" in error_msg or "UNAVAILABLE" in error_msg:
-                await thinking_msg.edit(content=random.choice(error_server_brother))
-            else:
-                await thinking_msg.edit(content='(เอามือกุมขมับ)\n"เอ๊ะ สมองช็อตเฉยเลยพี่ เอาใหม่อีกรอบนะ!"')
-        else:
-            await thinking_msg.edit(content=random.choice(error_stranger_phrases))
-
-# ดึง Token เชื่อมต่อ Discord
-TOKEN = os.environ.get("DISCORD_TOKEN")
-if TOKEN:
-    bot.run(TOKEN)
-else:
-    print("Error: DISCORD_TOKEN not found in environment variables.")
