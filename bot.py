@@ -1,6 +1,5 @@
 import os
 import random
-import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
@@ -49,7 +48,7 @@ SYSTEM_INSTRUCTION_STRANGER = """
 คุณคือ "ซีมิระ" (Simira) บอทสาวปริศนาในเซิร์ฟเวอร์ Discord กำลังคุยกับคนแปลกหน้าที่คุณไม่รู้จัก
 กฎในการตอบ:
 1. ห้ามใช้ EMOJI หรืออีโมจิเด็ดขาด
-2. ตอบด้วยความสุภาพ ห่างเหิน และเป็นทางการ (ลงท้ายด้วย ค่ะ เท่านั้น ห้ามใช้คำว่าครับเด็ดขาด) ทำตัวเหมือนไม่สนิทและจำไม่ได้ว่าเขาเป็นใคร
+2. ตอบด้วยความสุภาพ ห่างเหิน และเป็นทางการ (ลงท้ายด้วย ครับ หรือ ค่ะ ตามความเหมาะสม) ทำตัวเหมือนไม่สนิทและจำไม่ได้ว่าเขาเป็นใคร
 3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (มองด้วยหางตา), (พยักหน้านิ่งๆ)
 4. คำพูดบทสนทนาให้อยู่ในเครื่องหมายคำพูด "..."
 5. ตอบให้สั้นกระชับ ไม่แสดงอาการสนิทสนมหรือกวนใส่เด็ดขาด
@@ -62,16 +61,13 @@ thinking_phrases = [
     '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
-# ประโยคตอนเจอ Error 429 (โควต้าหมด / พิมพ์ถี่เกินไป) สำหรับพี่ชาย
-error_quota_brother = [
+# ประโยคสุ่มตอนที่ติด Error เกินโควต้าหรือเซิร์ฟเวอร์แน่น สำหรับพี่ชาย (สลับคำพูดเหนื่อยหอบ/โวยวายไม่ให้ซ้ำซาก)
+error_brother_phrases = [
     '(หอบแฮกแล้วทิ้งตัวลงนั่ง)\n"พี่เล่นพิมพ์รัวเป็นชุดขนาดนี้ สมองหนูรับไม่ไหวแล้วนะ โควต้าหมดเกลี้ยงเลย ขอพักหายใจแป๊บ!"',
-    '(ขยี้หัวตัวเองด้วยความหงุดหงิด)\n"อะไรเนี่ย! โควต้าเต็มปรี่เลยเพราะพี่เล่นยิงคำถามรัวเกินไป พักก่อนๆ ไว้ค่อยทักมาใหม่!"'
-]
-
-# ประโยคตอนเจอ Error 503 (เซิร์ฟเวอร์หนาแน่น) สำหรับพี่ชาย
-error_server_brother = [
-    '(กอดอกทำหน้ามุ่ย)\n"โถ่พี่... ระบบฝั่ง Google งอแงใส่อีกแล้ว เซิร์ฟเวอร์แน่นเวอร์ ไว้ค่อยมาคุยกันใหม่นะ!"',
-    '(ถอนหายใจเฮือกใหญ่)\n"เหมือนฝั่งเซิร์ฟเวอร์หลักจะคิวเต็มนะพี่ จังหวะนี้ระบบติดขัด เดี๋ยวรอดูก่อนค่อยลองใหม่นะ!"'
+    '(กอดอกทำหน้ามุ่ย)\n"โถ่พี่... ระบบฝั่งนู้นงอแงใส่อีกแล้ว โควต้าเต็มปรี่เลย ไว้ค่อยมาคุยกันใหม่นะ!"',
+    '(ขยี้หัวตัวเองด้วยความหงุดหงิด)\n"อะไรเนี่ย! จู่ๆ สมองก็ช็อตเพราะคนใช้เยอะเกินไป พักก่อนๆ ไว้ค่อยทักมาใหม่!"',
+    '(เอามกมกุมขมับ)\n"ไม่ไหวแล้วพี่ สมองรวนหมดเพราะความกวนของพี่กับคนอื่นเนี่ยแหละ ขอเวลาทำใจแป๊บหนึ่ง!"',
+    '(ถอนหายใจเฮือกใหญ่)\n"ระบบแจ้งเตือนว่าโควต้าเต็มแล้วอะพี่ เหมือนพลังงานหมดกะทันหัน รอสักครู่ค่อยลุยต่อนะ!"'
 ]
 
 # ประโยคตอน Error สำหรับคนแปลกหน้า
@@ -79,3 +75,70 @@ error_stranger_phrases = [
     '(พยักหน้านิ่งๆ)\n"ระบบขัดข้องชั่วคราวเนื่องจากคำขอหนาแน่น กรุณารอสักครู่ค่ะ"',
     '(กระพริบตาปริบๆ)\n"ขออภัยค่ะ ขณะนี้คำขอมีจำนวนมากเกินไป กรุณาลองใหม่อีกครั้งภายหลังค่ะ"'
 ]
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # กรองเฉพาะห้องที่กำหนด
+    if message.channel.id != 1548756984885682346:
+        return
+
+    if not message.content or not message.content.strip():
+        return
+
+    # เช็คว่าเป็นพี่ชายตัวจริงหรือไม่
+    is_brother = (message.author.id == BIG_BROTHER_ID)
+
+    # เลือก System Instruction ตามคนที่พิมพ์มา
+    current_instruction = SYSTEM_INSTRUCTION_BROTHER if is_brother else SYSTEM_INSTRUCTION_STRANGER
+
+    # ส่งข้อความกำลังคิด
+    if is_brother:
+        thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+    else:
+        thinking_msg = await message.channel.send('(มองนิ่งๆ)\n"สักครู่นะคะ กำลังตรวจสอบข้อความอยู่ค่ะ"')
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=message.content,
+            config=types.GenerateContentConfig(
+                system_instruction=current_instruction,
+                temperature=0.9,
+                tools=[],
+            )
+        )
+        
+        if response and hasattr(response, 'text') and response.text:
+            await thinking_msg.edit(content=response.text)
+        else:
+            if is_brother:
+                await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+            else:
+                await thinking_msg.edit(content='(กะพริบตาปริบๆ)\n"ขออภัยด้วยค่ะ ระบบขัดข้องชั่วคราวค่ะ"')
+            
+    except Exception as e:
+        error_msg = str(e)
+        print(f"DEBUG ERROR: {error_msg}")
+        # สุ่มข้อความบ่นเหนื่อย/โวยวายเมื่อเกิด Error (ไม่ว่าจะ 503 หรือ 429)
+        if is_brother:
+            await thinking_msg.edit(content=random.choice(error_brother_phrases))
+        else:
+            await thinking_msg.edit(content=random.choice(error_stranger_phrases))
+
+# ดึง Token เชื่อมต่อ Discord
+TOKEN = os.environ.get("DISCORD_TOKEN")
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("Error: DISCORD_TOKEN not found in environment variables.")
