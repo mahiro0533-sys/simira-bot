@@ -53,7 +53,7 @@ SYSTEM_INSTRUCTION_BROTHER = """
 2. ตอบให้สั้น กระชับ เป็นกันเองสุดๆ (ไม่พูดยาวยืดเยื้อเหมือนหุ่นยนต์)
 3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (หรี่ตามมองอมยิ้ม), (หัวเราะคิกคักนิ้วโป้ง)
 4. คำพูดบทสนทนาให้อยู่ในเครื่องหมายคำพูด "..."
-5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
+5. เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
 # คาแรคเตอร์สำหรับคนแปลกหน้าคนอื่นในเซิร์ฟเวอร์
@@ -119,15 +119,15 @@ async def on_message(message):
             thinking_msg = await message.channel.send('(มองนิ่งๆ)\n"สักครู่นะคะ กำลังตรวจสอบข้อความอยู่ค่ะ"')
 
         try:
-            # นำ tools=[] ออกแล้ว เพื่อไม่ให้ติดปัญหา Automatic Function Calling
-            response = client.models.generate_content(
+            # ใช้ client.chats เพื่อหลีกเลี่ยง Warning และปัญหาเรื่อง AFC ใน generate_content โดยตรง
+            chat = client.chats.create(
                 model="gemini-2.5-flash",
-                contents=message.content,
                 config=types.GenerateContentConfig(
                     system_instruction=current_instruction,
                     temperature=0.9,
                 )
             )
+            response = chat.send_message(message.content)
             
             if response and hasattr(response, 'text') and response.text:
                 await thinking_msg.edit(content=response.text)
