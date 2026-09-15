@@ -6,14 +6,21 @@ from threading import Thread
 # --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Simira is alive!")
+        try:
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"Simira is alive!")
+        except Exception:
+            pass
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
-    server.serve_forever()
+    try:
+        server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+        server.serve_forever()
+    except Exception as e:
+        print(f"Web Server Error: {e}")
 
 server_thread = Thread(target=run_server)
 server_thread.daemon = True
@@ -27,6 +34,9 @@ from google.genai import types
 
 # ดึงค่า API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    print("Error: GEMINI_API_KEY not found in environment variables.")
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
@@ -44,7 +54,7 @@ thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
     '🔄 (เอียงคอสงสัย)\n"อืม... ประโยคนี้หมายความว่าไงนะ? ขอคิดดูก่อนแป๊บหนึ่ง!"',
     '💬 (กอดอกพึมพำ)\n"แป๊บนะพี่ กำลังประมวลผลความกวนของพี่อยู่..."',
-    '✨ (หรี่ตามองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
+    '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
 intents = discord.Intents.default()
@@ -57,40 +67,44 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
-        return
-
-    # กรองเฉพาะห้องที่กำหนด
-    if message.channel.id != 1548756984885682346:
-        return
-
-    if not message.content or not message.content.strip():
-        return
-
-    # ส่งข้อความกำลังคิด
-    thinking_msg = await message.channel.send(random.choice(thinking_phrases))
-
     try:
-        # อัปเดตมาใช้รุ่น gemini-3.5-flash เพื่อความเสถียรสูงสุด
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=message.content,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.9,
-                tools=[],
+        if message.author == bot.user:
+            return
+
+        # กรองเฉพาะห้องที่กำหนด
+        if message.channel.id != 1548756984885682346:
+            return
+
+        if not message.content or not message.content.strip():
+            return
+
+        # ส่งข้อความกำลังคิด
+        thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+
+        try:
+            # ใช้ gemini-2.5-flash เพื่อความถูกต้องและเสถียรตามโครงสร้าง API ปัจจุบัน
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=message.content,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    temperature=0.9,
+                    tools=[],
+                )
             )
-        )
-        
-        if response and hasattr(response, 'text') and response.text:
-            await thinking_msg.edit(content=response.text)
-        else:
-            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
             
-    except Exception as e:
-        error_msg = str(e)
-        print(f"DEBUG ERROR: {error_msg}")
-        await thinking_msg.edit(content=f'(กอดอกมองค้อน)\n"ติดปัญหาอันนี้แหละพี่: {error_msg[:100]}"')
+            if response and hasattr(response, 'text') and response.text:
+                await thinking_msg.edit(content=response.text)
+            else:
+                await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+                
+        except Exception as e:
+            error_msg = str(e)
+            print(f"DEBUG ERROR: {error_msg}")
+            await thinking_msg.edit(content=f'(กอดอกมองค้อน)\n"ติดปัญหาอันนี้แหละพี่: {error_msg[:100]}"')
+
+    except Exception as outer_e:
+        print(f"MESSAGE EVENT ERROR: {outer_e}")
 
 # ดึง Token เชื่อมต่อ Discord
 TOKEN = os.environ.get("DISCORD_TOKEN")
@@ -98,6 +112,3 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("Error: DISCORD_TOKEN not found in environment variables.")
-
-
- ตัวเต็กที่สามากคุยได้ปกติดี
