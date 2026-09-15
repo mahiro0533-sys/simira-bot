@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
@@ -105,21 +106,33 @@ async def on_message(message):
         # ส่งข้อความกำลังคิด
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-        try:
-            # เรียกใช้งานฟังก์ชันดึงโมเดลรุ่นล่าสุดอัตโนมัติ
-            current_model = get_latest_flash_model()
-            print(f"Using Model: {current_model}")
+        response = None
+        current_model = get_latest_flash_model()
+        print(f"Using Model: {current_model}")
 
-            response = client.models.generate_content(
-                model=current_model,
-                contents=message.content,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    temperature=0.9,
-                    tools=[],
+        # เพิ่มระบบลองส่งใหม่ (Retry) อัตโนมัติ 2 ครั้ง ป้องกัน Error 503 ชั่วคราว
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                response = client.models.generate_content(
+                    model=current_model,
+                    contents=message.content,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_INSTRUCTION,
+                        temperature=0.9,
+                        tools=[],
+                    )
                 )
-            )
-            
+                if response and hasattr(response, 'text') and response.text:
+                    break # ถ้าส่งผ่านและได้ข้อความ ให้หลุดจากลูปส่งซ้ำทันที
+            except Exception as retry_err:
+                print(f"Attempt {attempt + 1} failed: {retry_err}")
+                if attempt < max_retries - 1:
+                    time.sleep(1.5) # พักรอก่อนลองส่งใหม่อีกรอบ
+                else:
+                    raise retry_err # ถ้าลองครบแล้วยังพัง ให้โยนข้อยกเว้นไปเข้าบล็อกจัดการ Error ด้านล่าง
+
+        try:
             if response and hasattr(response, 'text') and response.text:
                 await thinking_msg.edit(content=response.text)
             else:
@@ -133,6 +146,11 @@ async def on_message(message):
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR: {outer_e}")
+        try:
+            # ดักเคสฉุกเฉินระดับนอกสุดเพื่อให้แน่ใจว่าจะพ่นประโยคบ่นเสมอ
+            await message.channel.send(random.choice(error_phrases))
+        except:
+            pass
 
 # ดึง Token เชื่อมต่อ Discord
 TOKEN = os.environ.get("DISCORD_TOKEN")
