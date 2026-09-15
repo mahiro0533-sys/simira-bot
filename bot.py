@@ -72,6 +72,15 @@ thinking_phrases = [
     '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
+# ประโยคสุ่มสำหรับบ่น ปวดหัว หรือไล่ ตอนเกิด Error หรือคนใช้งานหนาแน่น
+error_phrases = [
+    '(กุมขมับส่ายหัว)\n"โอ๊ย ปวดหัวกับพี่ชะมัด เซิร์ฟเวอร์รวนหมดแล้วเนี่ย ไปพักสมองไกลๆ เลยไป!"',
+    '(ขยี้หัวตัวเองหงุดหงิด)\n"สมองหนูจะระเบิดเพราะคำถามพี่แล้วนะ ไปเล่นที่อื่นก่อนไป๊ ชักรำคาญแล้วนะ!"',
+    '(ถอนหายใจแรงๆ)\n"อะไรเนี่ย ระบบรวนไปหมดเพราะความกวนของพี่แท้ๆ ออกไปเลยนะ ชิ!"',
+    '(เบะปากทำหน้าเซ็ง)\n"ปวดหัวตึ้บเลย! วันนี้พอแค่นี้แหละ ปิดสวิตช์ตัวเองแป๊บ อย่าเพิ่งมาเซ้าซี้!"',
+    '(เอามือกุมขมับทำหน้ามึน)\n"มึนหัวชะมัด เซิร์ฟเวอร์งอแงเพราะพี่แน่ๆ ไปไกลๆ เลยไปชิ!"'
+]
+
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -119,7 +128,8 @@ async def on_message(message):
         except Exception as e:
             error_msg = str(e)
             print(f"DEBUG ERROR: {error_msg}")
-            await thinking_msg.edit(content=f'(กอดอกมองค้อน)\n"ติดปัญหาอันนี้แหละพี่: {error_msg[:100]}"')
+            # สุ่มข้อความบ่น ปวดหัว หรือไล่ แทนการพ่น Error ดิบๆ
+            await thinking_msg.edit(content=random.choice(error_phrases))
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR: {outer_e}")
