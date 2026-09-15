@@ -15,7 +15,6 @@ class SimpleHandler(BaseHTTPRequestHandler):
             pass
     
     def log_message(self, format, *args):
-        # ปิดการแสดง Log HTTP ยุ่บยั่บ เพื่อให้ Terminal สะอาดและประหยัดทรัพยากร
         return
 
 def run_server():
@@ -120,13 +119,13 @@ async def on_message(message):
             thinking_msg = await message.channel.send('(มองนิ่งๆ)\n"สักครู่นะคะ กำลังตรวจสอบข้อความอยู่ค่ะ"')
 
         try:
+            # นำ tools=[] ออกแล้ว เพื่อไม่ให้ติดปัญหา Automatic Function Calling
             response = client.models.generate_content(
                 model="gemini-2.5-flash",
                 contents=message.content,
                 config=types.GenerateContentConfig(
                     system_instruction=current_instruction,
                     temperature=0.9,
-                    tools=[],
                 )
             )
             
