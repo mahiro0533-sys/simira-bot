@@ -71,9 +71,9 @@ async def on_message(message):
     thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
     try:
-        # ใช้โมเดล gemini-2.5-flash ที่เสถียรและรองรับการทำงานเต็มรูปแบบ
+        # อัปเดตมาใช้รุ่น gemini-3.5-flash เพื่อความเสถียรสูงสุด
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.5-flash",
             contents=message.content,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
