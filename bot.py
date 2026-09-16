@@ -44,20 +44,28 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
-# --- ระบบอัปเดตโมเดลอัตโนมัติ (Dynamic Model Fetcher) ---
+# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
 def get_latest_flash_model():
+    available_models = []
     try:
         for m in client.models.list():
+            # กรองเฉพาะรุ่นที่มีคำว่า flash และรองรับการสร้างข้อความ
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
-                model_id = m.name.replace("models/", "")
-                print(f"Auto-detected active flash model: {model_id}")
-                return model_id
+                clean_name = m.name.replace("models/", "")
+                available_models.append(clean_name)
+        
+        if available_models:
+            # เลือกตัวแรกที่ระบบสแกนเจอว่าเป็นรุ่นล่าสุด
+            latest_model = available_models[0]
+            print(f"Auto-detected active flash model: {latest_model}")
+            return latest_model
+            
     except Exception as e:
         print(f"Auto-detect model error: {e}")
     
-    # แก้ไขค่าสำรองเป็นรุ่นที่เสถียรและปลอดภัยที่สุดเพื่อป้องกัน Error ลูป
-    fallback_model = "gemini-2.5-flash"
-    print(f"Using fallback model: {fallback_model}")
+    # ถ้าเกิดกรณีฉุกเฉินดึงรายชื่อไม่ผ่าน ระบบจะพยายามเลือกใช้ตระกูล Flash ยุคใหม่ล่าสุดทันที
+    fallback_model = "gemini-3.6-flash"
+    print(f"Using dynamic fallback model: {fallback_model}")
     return fallback_model
 # --------------------------------------------------------
 
