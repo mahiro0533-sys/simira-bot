@@ -55,8 +55,8 @@ def get_latest_flash_model():
     except Exception as e:
         print(f"Auto-detect model error: {e}")
     
-    # ค่าสำรองปัจจุบันที่ปลอดภัยและใช้งานได้จริง
-    fallback_model = "gemini-3.8-flash"
+    # แก้ไขค่าสำรองเป็นรุ่นที่เสถียรและปลอดภัยที่สุดเพื่อป้องกัน Error ลูป
+    fallback_model = "gemini-2.5-flash"
     print(f"Using fallback model: {fallback_model}")
     return fallback_model
 # --------------------------------------------------------
