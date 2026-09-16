@@ -93,6 +93,10 @@ def get_or_create_chat(user_id, model_name):
                 types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
                 types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
             ]
+        else:
+            initial_history = [
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
+            ]
         
         chat = client.chats.create(
             model=model_name,
@@ -149,12 +153,19 @@ async def on_message(message):
         user_id = message.author.id
         chat_session = get_or_create_chat(user_id, current_model)
 
+        # --- ส่วนที่เพิ่มเข้ามา: ห่อหุ้มข้อความเพื่อบอกโมเดลแบบเรียลタイムว่าใครกำลังคุยอยู่ ---
+        if user_id == OWNER_DISCORD_ID:
+            prompt_to_send = message.content
+        else:
+            prompt_to_send = f"[ผู้ใช้คนนี้ไม่ใช่พี่ชายของคุณ ห้ามเรียกว่าพี่เด็ดขาด]: {message.content}"
+        # --------------------------------------------------------------------------
+
         response = None
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                # ส่งข้อความผ่านระบบ Chat Session โดยตรง เสถียรและจำบทสนทนาได้ดีกว่า
-                response = chat_session.send_message(message.content)
+                # ส่งข้อความผ่านระบบ Chat Session โดยตรง (ใช้ prompt_to_send ที่คอยย้ำสถานะ)
+                response = chat_session.send_message(prompt_to_send)
                 if response and hasattr(response, 'text') and response.text:
                     break
             except Exception as retry_err:
