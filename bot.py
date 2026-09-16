@@ -3,6 +3,7 @@ import random
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+from collections import defaultdict, deque
 
 # --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -52,8 +53,31 @@ def get_latest_flash_model():
         print(f"Auto-detect model error: {e}")
     
     # ตัวสำรองฉุกเฉินปรับเป็นเวอร์ชันล่าสุด
-    return "gemini-3.5-flash"
+    return "gemini-2.5-flash"
 # --------------------------------------------------------
+
+# --- ระบบความจำบทสนทนาแยกตามรายบุคคล (Memory Buffer) ---
+# เก็บประวัติย้อนหลัง 10 ข้อความล่าสุดของแต่ละ User ID
+user_histories = defaultdict(lambda: deque(maxlen=10))
+
+def format_chat_contents(user_id, new_message):
+    history = user_histories[user_id]
+    contents = []
+    
+    # ใส่ประวัติเก่าทั้งหมดลงในโครงสร้าง Contents
+    for role, text in history:
+        contents.append(types.Content(
+            role=role,
+            parts=[types.Part.from_text(text=text)]
+        ))
+        
+    # ใส่ข้อความล่าสุดที่ผู้ใช้พิมพ์เข้ามาใหม่
+    contents.append(types.Content(
+        role="user",
+        parts=[types.Part.from_text(text=new_message)]
+    ))
+    return contents
+# ----------------------------------------------------
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
@@ -110,13 +134,17 @@ async def on_message(message):
         current_model = get_latest_flash_model()
         print(f"Using Model: {current_model}")
 
+        # ดึงประวัติแชทและรวมข้อความปัจจุบันของผู้ใช้คนนี้
+        user_id = message.author.id
+        chat_contents = format_chat_contents(user_id, message.content)
+
         # เพิ่มระบบลองส่งใหม่ (Retry) อัตโนมัติ 2 ครั้ง ป้องกัน Error 503 ชั่วคราว
         max_retries = 2
         for attempt in range(max_retries):
             try:
                 response = client.models.generate_content(
                     model=current_model,
-                    contents=message.content,
+                    contents=chat_contents,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
                         temperature=0.9,
@@ -134,7 +162,21 @@ async def on_message(message):
 
         try:
             if response and hasattr(response, 'text') and response.text:
-                await thinking_msg.edit(content=response.text)
+                reply_text = response.text
+                
+                # บันทึกประวัติลง Memory (User และ Model)
+                user_histories[user_id].append(("user", message.content))
+                user_histories[user_id].append(("model", reply_text))
+
+                # --- ระบบตัดทอนข้อความป้องกันเกิน 2,000 ตัวอักษรของ Discord ---
+                if len(reply_text) <= 2000:
+                    await thinking_msg.edit(content=reply_text)
+                else:
+                    # ตัดแบ่งส่งทีละ 2000 ตัวอักษร
+                    chunks = [reply_text[i:i+2000] for i in range(0, len(reply_text), 2000)]
+                    await thinking_msg.edit(content=chunks[0])
+                    for chunk in chunks[1:]:
+                        await message.channel.send(chunk)
             else:
                 await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
                 
