@@ -50,11 +50,15 @@ def get_latest_flash_model():
         for m in client.models.list():
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 model_id = m.name.replace("models/", "")
+                print(f"Auto-detected active flash model: {model_id}")
                 return model_id
     except Exception as e:
         print(f"Auto-detect model error: {e}")
     
-    return "gemini-2.5-flash"
+    # ค่าสำรองปัจจุบันที่ปลอดภัยและใช้งานได้จริง
+    fallback_model = "gemini-3.8-flash"
+    print(f"Using fallback model: {fallback_model}")
+    return fallback_model
 # --------------------------------------------------------
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
