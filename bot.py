@@ -41,7 +41,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
+# --- [จุดที่เพิ่มขึ้นจริง] กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
 # --- ระบบอัปเดตโมเดลอัตโนมัติ (Dynamic Model Fetcher) ---
@@ -64,13 +64,13 @@ def build_prompt_with_history(user_id, new_message):
     history = user_histories[user_id]
     prompt_parts = []
     
-    # เช็คว่าเป็นไอดีของคุณหรือไม่ เพื่อระบุสถานะพิเศษให้ AI รู้ทันที
+    # --- [จุดที่เพิ่มขึ้นจริง] เช็คว่าเป็นไอดีของคุณหรือไม่ เพื่อระบุสถานะพิเศษให้ AI รู้ทันที ---
     if user_id == OWNER_DISCORD_ID:
         prompt_parts.append("[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")
     else:
         prompt_parts.append(f"[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยคือ User ID: {user_id}]")
 
-    # รวมประวัติเก่าเข้ามาในรูปแบบบทสนทนาต่อกัน
+    # รวมประวัติเก่าเข้ามาในรูปแบบบทสนทนาต่อกัน (แยกชื่อเรียกตามไอดี)
     for speaker, text in history:
         if speaker == "user":
             prompt_parts.append(f"พี่ชาย: {text}" if user_id == OWNER_DISCORD_ID else f"ผู้ใช้: {text}")
