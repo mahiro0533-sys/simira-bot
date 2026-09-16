@@ -3,7 +3,7 @@ import random
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from collections import defaultdict, deque
+from collections import defaultdict
 
 # --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -41,7 +41,7 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- [จุดที่เพิ่มขึ้นจริง] กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
+# --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
 # --- ระบบอัปเดตโมเดลอัตโนมัติ (Dynamic Model Fetcher) ---
@@ -57,33 +57,6 @@ def get_latest_flash_model():
     return "gemini-2.5-flash"
 # --------------------------------------------------------
 
-# --- ระบบความจำบทสนทนารูปแบบข้อความต่อข้อความ พร้อมระบุตัวตน ---
-user_histories = defaultdict(lambda: deque(maxlen=6))
-
-def build_prompt_with_history(user_id, new_message):
-    history = user_histories[user_id]
-    prompt_parts = []
-    
-    # --- [จุดที่เพิ่มขึ้นจริง] เช็คว่าเป็นไอดีของคุณหรือไม่ เพื่อระบุสถานะพิเศษให้ AI รู้ทันที ---
-    if user_id == OWNER_DISCORD_ID:
-        prompt_parts.append("[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")
-    else:
-        prompt_parts.append(f"[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยคือ User ID: {user_id}]")
-
-    # รวมประวัติเก่าเข้ามาในรูปแบบบทสนทนาต่อกัน (แยกชื่อเรียกตามไอดี)
-    for speaker, text in history:
-        if speaker == "user":
-            prompt_parts.append(f"พี่ชาย: {text}" if user_id == OWNER_DISCORD_ID else f"ผู้ใช้: {text}")
-        else:
-            prompt_parts.append(f"ซีมิระ: {text}")
-            
-    # ใส่ข้อความล่าสุดเข้าไปท้ายสุด
-    prompt_parts.append(f"พี่ชาย: {new_message}" if user_id == OWNER_DISCORD_ID else f"ผู้ใช้: {new_message}")
-    prompt_parts.append("ซีมิระ: ") # ไกด์ให้ AI รู้ว่าถึงตาตัวเองตอบ
-    
-    return "\n".join(prompt_parts)
-# ----------------------------------------------------
-
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
 คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นใน Discord
@@ -94,6 +67,32 @@ SYSTEM_INSTRUCTION = """
 4. คำพูดบทสนทนาให้อยู่ในเครื่องหมายคำพูด "..."
 5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
+
+# --- จัดการเซสชันแชทแยกตามรายบุคคล (ใช้ระบบ Chat ของ Google GenAI โดยตรง) ---
+user_chats = {}
+
+def get_or_create_chat(user_id, model_name):
+    # หากผู้ใช้เปลี่ยนโมเดล หรือยังไม่มีเซสชัน ให้สร้างใหม่
+    if user_id not in user_chats:
+        # กำหนดบริบทเริ่มต้นตามตัวตนของผู้ใช้
+        initial_history = []
+        if user_id == OWNER_DISCORD_ID:
+            initial_history = [
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
+                types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
+            ]
+        
+        chat = client.chats.create(
+            model=model_name,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.9,
+            ),
+            history=initial_history
+        )
+        user_chats[user_id] = chat
+    return user_chats[user_id]
+# -----------------------------------------------------------------
 
 thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
@@ -132,24 +131,18 @@ async def on_message(message):
 
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-        response = None
         current_model = get_latest_flash_model()
         print(f"Using Model: {current_model}")
 
         user_id = message.author.id
-        final_prompt = build_prompt_with_history(user_id, message.content)
+        chat_session = get_or_create_chat(user_id, current_model)
 
+        response = None
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                response = client.models.generate_content(
-                    model=current_model,
-                    contents=final_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=SYSTEM_INSTRUCTION,
-                        temperature=0.9,
-                    )
-                )
+                # ส่งข้อความผ่านระบบ Chat Session โดยตรง เสถียรและจำบทสนทนาได้ดีกว่า
+                response = chat_session.send_message(message.content)
                 if response and hasattr(response, 'text') and response.text:
                     break
             except Exception as retry_err:
@@ -159,31 +152,25 @@ async def on_message(message):
                 else:
                     raise retry_err
 
-        try:
-            if response and hasattr(response, 'text') and response.text:
-                reply_text = response.text.strip()
-                
-                # บันทึกประวัติเก็บไว้
-                user_histories[user_id].append(("user", message.content))
-                user_histories[user_id].append(("model", reply_text))
+        if response and hasattr(response, 'text') and response.text:
+            reply_text = response.text.strip()
 
-                if len(reply_text) <= 2000:
-                    await thinking_msg.edit(content=reply_text)
-                else:
-                    chunks = [reply_text[i:i+2000] for i in range(0, len(reply_text), 2000)]
-                    await thinking_msg.edit(content=chunks[0])
-                    for chunk in chunks[1:]:
-                        await message.channel.send(chunk)
+            if len(reply_text) <= 2000:
+                await thinking_msg.edit(content=reply_text)
             else:
-                await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
-                
-        except Exception as e:
-            error_msg = str(e)
-            print(f"DEBUG ERROR: {error_msg}")
-            await thinking_msg.edit(content=random.choice(error_phrases))
+                chunks = [reply_text[i:i+2000] for i in range(0, len(reply_text), 2000)]
+                await thinking_msg.edit(content=chunks[0])
+                for chunk in chunks[1:]:
+                    await message.channel.send(chunk)
+        else:
+            print("WARNING: Response text was empty or invalid.")
+            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
 
     except Exception as outer_e:
-        print(f"MESSAGE EVENT ERROR: {outer_e}")
+        # พิมพ์ Error ดิบลงใน Logs ของ Render เพื่อให้คุณตรวจสอบได้ทันทีถ้ายังมีปัญหา
+        print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
+        import traceback
+        traceback.print_exc()
         try:
             await message.channel.send(random.choice(error_phrases))
         except:
