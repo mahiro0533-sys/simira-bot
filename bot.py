@@ -41,10 +41,12 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
+OWNER_DISCORD_ID = 1515771398688084008
+
 # --- ระบบอัปเดตโมเดลอัตโนมัติ (Dynamic Model Fetcher) ---
 def get_latest_flash_model():
     try:
-        # วิ่งไปเช็ครายชื่อโมเดลรุ่นล่าสุดจากระบบ Google แบบเรียลไทม์
         for m in client.models.list():
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 model_id = m.name.replace("models/", "")
@@ -52,36 +54,39 @@ def get_latest_flash_model():
     except Exception as e:
         print(f"Auto-detect model error: {e}")
     
-    # ตัวสำรองฉุกเฉินปรับเป็นเวอร์ชันล่าสุด
     return "gemini-2.5-flash"
 # --------------------------------------------------------
 
-# --- ระบบความจำบทสนทนาแยกตามรายบุคคล (Memory Buffer) ---
-# เก็บประวัติย้อนหลัง 10 ข้อความล่าสุดของแต่ละ User ID
-user_histories = defaultdict(lambda: deque(maxlen=10))
+# --- ระบบความจำบทสนทนารูปแบบข้อความต่อข้อความ พร้อมระบุตัวตน ---
+user_histories = defaultdict(lambda: deque(maxlen=6))
 
-def format_chat_contents(user_id, new_message):
+def build_prompt_with_history(user_id, new_message):
     history = user_histories[user_id]
-    contents = []
+    prompt_parts = []
     
-    # ใส่ประวัติเก่าทั้งหมดลงในโครงสร้าง Contents
-    for role, text in history:
-        contents.append(types.Content(
-            role=role,
-            parts=[types.Part.from_text(text=text)]
-        ))
-        
-    # ใส่ข้อความล่าสุดที่ผู้ใช้พิมพ์เข้ามาใหม่
-    contents.append(types.Content(
-        role="user",
-        parts=[types.Part.from_text(text=new_message)]
-    ))
-    return contents
+    # เช็คว่าเป็นไอดีของคุณหรือไม่ เพื่อระบุสถานะพิเศษให้ AI รู้ทันที
+    if user_id == OWNER_DISCORD_ID:
+        prompt_parts.append("[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")
+    else:
+        prompt_parts.append(f"[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยคือ User ID: {user_id}]")
+
+    # รวมประวัติเก่าเข้ามาในรูปแบบบทสนทนาต่อกัน
+    for speaker, text in history:
+        if speaker == "user":
+            prompt_parts.append(f"พี่ชาย: {text}" if user_id == OWNER_DISCORD_ID else f"ผู้ใช้: {text}")
+        else:
+            prompt_parts.append(f"ซีมิระ: {text}")
+            
+    # ใส่ข้อความล่าสุดเข้าไปท้ายสุด
+    prompt_parts.append(f"พี่ชาย: {new_message}" if user_id == OWNER_DISCORD_ID else f"ผู้ใช้: {new_message}")
+    prompt_parts.append("ซีมิระ: ") # ไกด์ให้ AI รู้ว่าถึงตาตัวเองตอบ
+    
+    return "\n".join(prompt_parts)
 # ----------------------------------------------------
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
-คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นกับพี่ชายใน Discord
+คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นใน Discord
 กฎในการตอบ:
 1. ห้ามใช้ EMOJI หรืออีโมจิเด็ดขาด
 2. ตอบให้สั้น กระชับ เป็นกันเองสุดๆ (ไม่พูดยาวยืดเยื้อเหมือนหุ่นยนต์)
@@ -97,7 +102,6 @@ thinking_phrases = [
     '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
-# ประโยคสุ่มสำหรับบ่น ปวดหัว หรือไล่ ตอนเกิด Error หรือคนใช้งานหนาแน่น
 error_phrases = [
     '(กุมขมับส่ายหัว)\n"โอ๊ย ปวดหัวกับพี่ชะมัด เซิร์ฟเวอร์รวนหมดแล้วเนี่ย ไปพักสมองไกลๆ เลยไป!"',
     '(ขยี้หัวตัวเองหงุดหงิด)\n"สมองหนูจะระเบิดเพราะคำถามพี่แล้วนะ ไปเล่นที่อื่นก่อนไป๊ ชักรำคาญแล้วนะ!"',
@@ -120,59 +124,52 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        # กรองเฉพาะห้องที่กำหนด
         if message.channel.id != 1548756984885682346:
             return
 
         if not message.content or not message.content.strip():
             return
 
-        # ส่งข้อความกำลังคิด
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         response = None
         current_model = get_latest_flash_model()
         print(f"Using Model: {current_model}")
 
-        # ดึงประวัติแชทและรวมข้อความปัจจุบันของผู้ใช้คนนี้
         user_id = message.author.id
-        chat_contents = format_chat_contents(user_id, message.content)
+        final_prompt = build_prompt_with_history(user_id, message.content)
 
-        # เพิ่มระบบลองส่งใหม่ (Retry) อัตโนมัติ 2 ครั้ง ป้องกัน Error 503 ชั่วคราว
         max_retries = 2
         for attempt in range(max_retries):
             try:
                 response = client.models.generate_content(
                     model=current_model,
-                    contents=chat_contents,
+                    contents=final_prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_INSTRUCTION,
                         temperature=0.9,
-                        tools=[],
                     )
                 )
                 if response and hasattr(response, 'text') and response.text:
-                    break # ถ้าส่งผ่านและได้ข้อความ ให้หลุดจากลูปส่งซ้ำทันที
+                    break
             except Exception as retry_err:
                 print(f"Attempt {attempt + 1} failed: {retry_err}")
                 if attempt < max_retries - 1:
-                    time.sleep(1.5) # พักรอก่อนลองส่งใหม่อีกรอบ
+                    time.sleep(1.5)
                 else:
-                    raise retry_err # ถ้าลองครบแล้วยังพัง ให้โยนข้อยกเว้นไปเข้าบล็อกจัดการ Error ด้านล่าง
+                    raise retry_err
 
         try:
             if response and hasattr(response, 'text') and response.text:
-                reply_text = response.text
+                reply_text = response.text.strip()
                 
-                # บันทึกประวัติลง Memory (User และ Model)
+                # บันทึกประวัติเก็บไว้
                 user_histories[user_id].append(("user", message.content))
                 user_histories[user_id].append(("model", reply_text))
 
-                # --- ระบบตัดทอนข้อความป้องกันเกิน 2,000 ตัวอักษรของ Discord ---
                 if len(reply_text) <= 2000:
                     await thinking_msg.edit(content=reply_text)
                 else:
-                    # ตัดแบ่งส่งทีละ 2000 ตัวอักษร
                     chunks = [reply_text[i:i+2000] for i in range(0, len(reply_text), 2000)]
                     await thinking_msg.edit(content=chunks[0])
                     for chunk in chunks[1:]:
@@ -183,18 +180,15 @@ async def on_message(message):
         except Exception as e:
             error_msg = str(e)
             print(f"DEBUG ERROR: {error_msg}")
-            # สุ่มข้อความบ่น ปวดหัว หรือไล่ แทนการพ่น Error ดิบๆ
             await thinking_msg.edit(content=random.choice(error_phrases))
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR: {outer_e}")
         try:
-            # ดักเคสฉุกเฉินระดับนอกสุดเพื่อให้แน่ใจว่าจะพ่นประโยคบ่นเสมอ
             await message.channel.send(random.choice(error_phrases))
         except:
             pass
 
-# ดึง Token เชื่อมต่อ Discord
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
     bot.run(TOKEN)
