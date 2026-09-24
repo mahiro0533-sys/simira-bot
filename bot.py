@@ -49,13 +49,11 @@ def get_latest_flash_model():
     available_models = []
     try:
         for m in client.models.list():
-            # กรองเฉพาะรุ่นที่มีคำว่า flash และรองรับการสร้างข้อความ
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 clean_name = m.name.replace("models/", "")
                 available_models.append(clean_name)
         
         if available_models:
-            # เลือกตัวแรกที่ระบบสแกนเจอว่าเป็นรุ่นล่าสุด
             latest_model = available_models[0]
             print(f"Auto-detected active flash model: {latest_model}")
             return latest_model
@@ -63,7 +61,6 @@ def get_latest_flash_model():
     except Exception as e:
         print(f"Auto-detect model error: {e}")
     
-    # ถ้าเกิดกรณีฉุกเฉินดึงรายชื่อไม่ผ่าน ระบบจะพยายามเลือกใช้ตระกูล Flash ยุคใหม่ล่าสุดทันที
     fallback_model = "gemini-3.6-flash"
     print(f"Using dynamic fallback model: {fallback_model}")
     return fallback_model
@@ -80,13 +77,11 @@ SYSTEM_INSTRUCTION = """
 5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
-# --- จัดการเซสชันแชทแยกตามรายบุคคล (ใช้ระบบ Chat ของ Google GenAI โดยตรง) ---
+# --- จัดการเซสชันแชทแยกตามรายบุคคล ---
 user_chats = {}
 
 def get_or_create_chat(user_id, model_name):
-    # หากผู้ใช้เปลี่ยนโมเดล หรือยังไม่มีเซสชัน ให้สร้างใหม่
     if user_id not in user_chats:
-        # กำหนดบริบทเริ่มต้นตามตัวตนของผู้ใช้
         initial_history = []
         if user_id == OWNER_DISCORD_ID:
             initial_history = [
@@ -139,8 +134,10 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        if message.channel.id != 1548756984885682346:
-            return
+        # --- ปิดการเช็คไอดีห้องชั่วคราวเพื่อให้คุยในแชทส่วนตัว (DM) หรือห้องไหนก็ได้ ---
+        # if message.channel.id != 1548756984885682346:
+        #     return
+        # -------------------------------------------------------------------------
 
         if not message.content or not message.content.strip():
             return
@@ -153,18 +150,15 @@ async def on_message(message):
         user_id = message.author.id
         chat_session = get_or_create_chat(user_id, current_model)
 
-        # --- ส่วนที่เพิ่มเข้ามา: ห่อหุ้มข้อความเพื่อบอกโมเดลแบบเรียลタイムว่าใครกำลังคุยอยู่ ---
         if user_id == OWNER_DISCORD_ID:
             prompt_to_send = message.content
         else:
             prompt_to_send = f"[ผู้ใช้คนนี้ไม่ใช่พี่ชายของคุณ ห้ามเรียกว่าพี่เด็ดขาด]: {message.content}"
-        # --------------------------------------------------------------------------
 
         response = None
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                # ส่งข้อความผ่านระบบ Chat Session โดยตรง (ใช้ prompt_to_send ที่คอยย้ำสถานะ)
                 response = chat_session.send_message(prompt_to_send)
                 if response and hasattr(response, 'text') and response.text:
                     break
@@ -190,7 +184,6 @@ async def on_message(message):
             await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
 
     except Exception as outer_e:
-        # พิมพ์ Error ดิบลงใน Logs ของ Render เพื่อให้คุณตรวจสอบได้ทันทีถ้ายังมีปัญหา
         print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
         import traceback
         traceback.print_exc()
