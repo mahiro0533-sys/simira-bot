@@ -44,6 +44,9 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
+# --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
+ALLOWED_CHANNEL_ID = 1548310222357926058
+
 # --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
 def get_latest_flash_model():
     available_models = []
@@ -134,10 +137,12 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        # --- ปิดการเช็คไอดีห้องชั่วคราวเพื่อให้คุยในแชทส่วนตัว (DM) หรือห้องไหนก็ได้ ---
-        # if message.channel.id != 1548756984885682346:
-        #     return
-        # -------------------------------------------------------------------------
+        # --- ตรวจสอบเงื่อนไขห้อง: อนุญาตถ้าเป็นแชทส่วนตัว (DM) หรือตรงกับห้องที่กำหนดไว้ในเซิร์ฟเวอร์ ---
+        if ALLOWED_CHANNEL_ID != 0:
+            is_dm = isinstance(message.channel, discord.DMChannel)
+            if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
+                return
+        # -----------------------------------------------------------------------------------------
 
         if not message.content or not message.content.strip():
             return
