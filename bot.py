@@ -45,7 +45,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 OWNER_DISCORD_ID = 1515771398688084008
 
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
-ALLOWED_CHANNEL_ID = 1548310222357926058
+ALLOWED_CHANNEL_ID = 1559088513222316102
 
 # --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
 def get_latest_flash_model():
