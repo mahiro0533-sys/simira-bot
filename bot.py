@@ -1,3 +1,4 @@
+import asyncio
 import os
 import random
 import time
@@ -46,6 +47,17 @@ OWNER_DISCORD_ID = 1515771398688084008
 
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
 ALLOWED_CHANNEL_ID = 1559088513222316102
+
+# --- ตัวแปรและค่าคงที่สำหรับระบบ AFK (Manual Toggle) ---
+is_afk = False
+afk_reason = ""
+
+AFK_PRESETS = {
+    "1": "(ทำหน้ามุ่ยเบะปาก) \"ตอนนี้พี่ชายกำลังเล่นเกมอยู่นะ! อย่าเพิ่งมากวนล่ะ เดี๋ยวพี่เขาแพ้ขึ้นมาหนูไม่รู้ด้วยนะ ฝากข้อความไว้ก่อนได้เลย!\"",
+    "2": "(กอดอกทำหน้าจริงจัง) \"พี่ชายกำลังยุ่งสุดๆ อยู่น่ะสิ! มีเรื่องอะไรด่วนไหม? ฝากเรื่องไว้ก่อนได้เลย เดี๋ยวพอพี่เขาว่างหนูจะรีบสะกิดบอกให้!\"",
+    "3": "(เอานิ้วชี้แตะปากทำเสียง ชู้ว์...) \"เบาๆ หน่อยสิ! ตอนนี้พี่ชายกำลังนอนพักผ่อนอยู่นะ อย่าเพิ่งมาส่งเสียงดังรบกวนล่ะ มีอะไรก็ทิ้งข้อความไว้ได้เลย!\""
+}
+# ----------------------------------------------------
 
 # --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
 def get_latest_flash_model():
@@ -131,21 +143,71 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
 
+# --- คำสั่งสำหรับเปิด AFK (รองรับทั้ง 3 สถานะ หรือพิมพ์เหตุผลเอง) ---
+@bot.command(name="afk")
+async def afk_command(ctx, option: str = "2"):
+    global is_afk, afk_reason
+    # ให้คำสั่งนี้ทำงานได้เฉพาะใน DM หรือห้องที่อนุญาตเท่านั้น
+    if not isinstance(ctx.channel, discord.DMChannel) and ctx.channel.id != ALLOWED_CHANNEL_ID:
+        return
+
+    if option in AFK_PRESETS:
+        afk_reason = AFK_PRESETS[option]
+    else:
+        afk_reason = f'(เอียงคอน้อยๆ) "ตอนนี้พี่ชายติดภารกิจ: \'{option}\' อยู่น่ะสิ! มีอะไรฝากข้อความไว้ได้เลย เดี๋ยวหนูไปบอกให้!"'
+    
+    is_afk = True
+    await ctx.send('(พยักหน้ารับคำสั่งอย่างแข็งขัน)\n"รับทราบค่ะพี่! หนูเริ่มโหมดเฝ้าห้องและตอบแทนพี่ให้แล้วนะ!"')
+
+# --- คำสั่งสำหรับปิด AFK (ต้องพิมพ์ !unafk เท่านั้น) ---
+@bot.command(name="unafk")
+async def unafk_command(ctx):
+    global is_afk, afk_reason
+    if not isinstance(ctx.channel, discord.DMChannel) and ctx.channel.id != ALLOWED_CHANNEL_ID:
+        return
+
+    if is_afk:
+        is_afk = False
+        afk_reason = ""
+        await ctx.send('(ยิ้มแป้นวิ่งเข้าไปหา)\n"ยินดีต้อนรับกลับมาค่ะพี่ชาย! หนูปลดโหมด AFK ให้เรียบร้อยแล้วน้า~"')
+    else:
+        await ctx.send('(เอียงคอสงสัย)\n"พี่ไม่ได้เปิดโหมด AFK ไว้สักหน่อยนี่นา!"')
+
 @bot.event
 async def on_message(message):
+    global is_afk, afk_reason
+
     try:
         if message.author == bot.user:
             return
 
+        # ตรวจสอบข้อความคำสั่งบอทก่อน (เช่น !afk หรือ !unafk)
+        await bot.process_commands(message)
+
         # --- ตรวจสอบเงื่อนไขห้อง: อนุญาตถ้าเป็นแชทส่วนตัว (DM) หรือตรงกับห้องที่กำหนดไว้ในเซิร์ฟเวอร์ ---
+        is_dm = isinstance(message.channel, discord.DMChannel)
         if ALLOWED_CHANNEL_ID != 0:
-            is_dm = isinstance(message.channel, discord.DMChannel)
             if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
                 return
         # -----------------------------------------------------------------------------------------
 
         if not message.content or not message.content.strip():
             return
+
+        # หากมีการเปิดใช้งานโหมด AFK อยู่
+        if is_afk:
+            # เงื่อนไข: ถ้ามีคนแท็กชื่อพี่ชายในเซิร์ฟเวอร์ หรือมีคนทักแชทส่วนตัวหาพี่
+            is_owner_mentioned = (bot.user in message.mentions) or (f"<@{OWNER_DISCORD_ID}>" in message.content)
+            if is_dm or is_owner_mentioned:
+                # รอจับเวลา 30 วินาที เพื่อดูว่าพี่ชายจะมาตอบเองหรือไม่
+                await asyncio.sleep(30)
+                
+                # ถ้าครบ 30 วินาทีแล้วพี่ยังอยู่ในสถานะ AFK อยู่
+                if is_afk:
+                    target_channel = bot.get_channel(ALLOWED_CHANNEL_ID)
+                    if target_channel:
+                        await target_channel.send(f"{message.author.mention} {afk_reason}")
+                return
 
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
