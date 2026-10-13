@@ -43,14 +43,15 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # ไอดีเจ้าของบอท (พี่ชาย)
 OWNER_DISCORD_ID = 1515771398688084008
 
-# 🎯 **กำหนดไอดีห้องที่อนุญาตให้บอทสแกน (เฉพาะห้องที่พี่ระบุเท่านั้น)**
-ALLOWED_CHANNEL_IDS = [
-    1559088513222316102,  # ห้องหลักเดิม
-    1557629870534692905,  # ห้องใหม่ที่พี่ชายเพิ่งเพิ่มเข้ามา
-]
+# 🎯 **กำหนดหน้าที่ของแต่ละห้องให้ชัดเจน:**
+AI_CHAT_CHANNEL_ID = 1559088513222316102   # ห้องเดียวเท่านั้นที่อนุญาตให้ AI ตอบคุยเล่นได้!
+MAIN_TALK_CHANNEL_ID = 1557629870534692905 # ห้องพูดคุยหลัก (อ่านได้อย่างเดียว ห้าม AI ตอบคุยเล่น ยกเว้นแจ้งเตือน AFK ตอนมีคนแท็กพี่ชาย)
+
+# รวมไอดีห้องที่ยอมให้บอทมองเห็น
+ALLOWED_CHANNEL_IDS = [AI_CHAT_CHANNEL_ID, MAIN_TALK_CHANNEL_ID]
 
 # --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" ---
-ACTIVE_MODEL = "gemini-3.6-flash" # ค่าสำรองฉุกเฉิน
+ACTIVE_MODEL = "gemini-3.6-flash"
 
 def detect_best_model_once():
     global ACTIVE_MODEL
@@ -182,12 +183,11 @@ async def on_message(message):
 
         is_dm = isinstance(message.channel, discord.DMChannel)
 
-        # 🎯 **ระบบ Early Exit กั้นหน้าประตูห้องแบบเข้มงวด:**
-        # ถ้าข้อความไม่ได้มาจาก DM และไม่ได้อยู่ในห้องที่อนุญาต -> เมินและตัดจบการทำงานทันที! ไม่กินโควตา!
+        # 2. เช็กห้อง: ถ้าไม่ใช่ DM และไม่ใช่ห้องที่อยู่ใน ALLOWED_CHANNEL_IDS -> เมินทันที!
         if not is_dm and message.channel.id not in ALLOWED_CHANNEL_IDS:
             return
 
-        # 2. เช็กคำสั่งบอท (!afk, !unafk)
+        # 3. เช็กคำสั่งบอท (!afk, !unafk)
         ctx = await bot.get_context(message)
         if ctx.valid:
             await bot.process_commands(message)
@@ -195,17 +195,22 @@ async def on_message(message):
 
         is_owner_mentioned = (bot.user in message.mentions) or (f"<@{OWNER_DISCORD_ID}>" in message.content) or (str(OWNER_DISCORD_ID) in message.content)
 
-        # 3. ระบบ AFK: ทำงานเฉพาะเมื่อ "มีคนมาแท็ก" ในห้องที่อนุญาต
+        # 4. ระบบ AFK: ถ้าเปิด AFK อยู่ แล้วมีคนแท็กพี่ชาย -> ตอบข้อความ AFK (ไม่กิน API)
         if is_afk and (is_dm or is_owner_mentioned) and message.author.id != OWNER_DISCORD_ID:
-            await asyncio.sleep(30)
+            await asyncio.sleep(15)
             if is_afk:
                 await message.channel.send(f"{message.author.mention} {afk_reason}")
+            return
+
+        # 🛑 **เงื่อนไขสำคัญที่เพิ่มเข้ามาแก้ปัญหา:**
+        # ถ้าข้อความมาจากห้องพูดคุยหลัก (`1557629870534692905`) และ ไม่ใช่คำสั่ง/ไม่ใช่ AFK -> "ห้าม AI ตอบคุยเล่นเด็ดขาด!"
+        if not is_dm and message.channel.id == MAIN_TALK_CHANNEL_ID:
             return
 
         if not message.content or not message.content.strip():
             return
 
-        # --- เข้าสู่กระบวนการส่งข้อความให้ AI ---
+        # --- เข้าสู่กระบวนการ AI ตอบคุยเล่น (จะเกิดขึ้นเฉพาะในห้อง AI_CHAT_CHANNEL_ID หรือ DM เท่านั้น!) ---
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         user_id = message.author.id
