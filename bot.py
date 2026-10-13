@@ -40,11 +40,16 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ไอดีสำคัญ
+# ไอดีเจ้าของบอท (พี่ชาย)
 OWNER_DISCORD_ID = 1515771398688084008
-ALLOWED_CHANNEL_ID = 1559088513222316102
 
-# --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" (ไม่กินโควตาตอนแชท) ---
+# 🎯 **กำหนดไอดีห้องที่อนุญาตให้บอทสแกน (เฉพาะห้องที่พี่ระบุเท่านั้น)**
+ALLOWED_CHANNEL_IDS = [
+    1559088513222316102,  # ห้องหลักเดิม
+    1557629870534692905,  # ห้องใหม่ที่พี่ชายเพิ่งเพิ่มเข้ามา
+]
+
+# --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" ---
 ACTIVE_MODEL = "gemini-3.6-flash" # ค่าสำรองฉุกเฉิน
 
 def detect_best_model_once():
@@ -62,7 +67,6 @@ def detect_best_model_once():
     except Exception as e:
         print(f"⚠️ Auto-detect model warning: {e}, using default: {ACTIVE_MODEL}")
 
-# สแกนหาโมเดลทันทีเมื่อบอทเริ่มทำงาน
 detect_best_model_once()
 # ------------------------------------------------------------------------------
 
@@ -102,7 +106,7 @@ def get_or_create_chat(user_id):
             ]
         
         chat = client.chats.create(
-            model=ACTIVE_MODEL, # ใช้โมเดลที่สแกนเจอตอนเปิดเครื่อง
+            model=ACTIVE_MODEL,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.95,
@@ -176,39 +180,32 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        # 2. เช็กคำสั่งบอท (!afk, !unafk) ถ้าใช่ก็ทำงานแล้วจบเลย
+        is_dm = isinstance(message.channel, discord.DMChannel)
+
+        # 🎯 **ระบบ Early Exit กั้นหน้าประตูห้องแบบเข้มงวด:**
+        # ถ้าข้อความไม่ได้มาจาก DM และไม่ได้อยู่ในห้องที่อนุญาต -> เมินและตัดจบการทำงานทันที! ไม่กินโควตา!
+        if not is_dm and message.channel.id not in ALLOWED_CHANNEL_IDS:
+            return
+
+        # 2. เช็กคำสั่งบอท (!afk, !unafk)
         ctx = await bot.get_context(message)
         if ctx.valid:
             await bot.process_commands(message)
             return
 
-        is_dm = isinstance(message.channel, discord.DMChannel)
-        
-        # เช็กว่ามีการแท็กบอท หรือแท็กพี่ชายไหม
         is_owner_mentioned = (bot.user in message.mentions) or (f"<@{OWNER_DISCORD_ID}>" in message.content) or (str(OWNER_DISCORD_ID) in message.content)
 
-        # 🎯 **ระบบ Early Exit (ประหยัดโควตา 100%):**
-        # ถ้า "โหมด AFK เปิดอยู่" แต่ "ไม่มีใครแท็กพี่ชาย/บอท" และ "ไม่ได้ทัก DM" -> จบการทำงานทันที! ไม่แตะ API เลย!
-        if is_afk and not is_owner_mentioned and not is_dm:
-            return
-
-        # 3. ระบบ AFK: ทำงานเฉพาะเมื่อ "มีคนมาแท็ก" เท่านั้น
+        # 3. ระบบ AFK: ทำงานเฉพาะเมื่อ "มีคนมาแท็ก" ในห้องที่อนุญาต
         if is_afk and (is_dm or is_owner_mentioned) and message.author.id != OWNER_DISCORD_ID:
             await asyncio.sleep(30)
             if is_afk:
-                target_channel = bot.get_channel(ALLOWED_CHANNEL_ID)
-                if target_channel:
-                    await target_channel.send(f"{message.author.mention} {afk_reason}")
-            return
-
-        # 4. ระบบ AI คุยเล่นปกติ: ให้คุยเฉพาะใน DM หรือ ในห้องที่กำหนดเท่านั้น
-        if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
+                await message.channel.send(f"{message.author.mention} {afk_reason}")
             return
 
         if not message.content or not message.content.strip():
             return
 
-        # --- เข้าสู่กระบวนการส่งข้อความให้ AI (ทำเฉพาะตอนที่จำเป็นแล้วเท่านั้น!) ---
+        # --- เข้าสู่กระบวนการส่งข้อความให้ AI ---
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         user_id = message.author.id
