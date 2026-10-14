@@ -1,9 +1,9 @@
-import asyncio
 import os
 import random
 import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
+from collections import defaultdict
 
 # --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
@@ -34,97 +34,93 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
+# ดึงค่า API Key
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("Error: GEMINI_API_KEY not found in environment variables.")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ไอดีเจ้าของบอท (พี่ชาย)
+# --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
-# 🎯 **กำหนดหน้าที่ของแต่ละห้องให้ชัดเจน:**
-AI_CHAT_CHANNEL_ID = 1559088513222316102   # ห้องคุยเล่นกับ AI (ให้น้องตอบคุยเล่นได้)
-MAIN_TALK_CHANNEL_ID = 1557629870534692905 # ห้องพูดคุยหลัก (อ่านดักจับเฉพาะคนแท็กชื่อพี่ชายตอนเปิด AFK เท่านั้น ห้าม AI คุยเล่นเด็ดขาด!)
+# --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
+ALLOWED_CHANNEL_ID = 1559088513222316102
 
-ALLOWED_CHANNEL_IDS = [AI_CHAT_CHANNEL_ID, MAIN_TALK_CHANNEL_ID]
-
-# --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" (ระบบเดิมที่พี่ชายตั้งไว้) ---
-ACTIVE_MODEL = "gemini-2.5-flash" # ค่าสำรองฉุกเฉินเริ่มต้น
-
-def detect_best_model_once():
-    global ACTIVE_MODEL
+# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
+def get_latest_flash_model():
+    available_models = []
     try:
-        available_models = []
         for m in client.models.list():
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 clean_name = m.name.replace("models/", "")
                 available_models.append(clean_name)
         
         if available_models:
-            ACTIVE_MODEL = available_models[0]
-            print(f"🚀 [Startup] Auto-detected best flash model: {ACTIVE_MODEL}")
+            latest_model = available_models[0]
+            print(f"Auto-detected active flash model: {latest_model}")
+            return latest_model
+            
     except Exception as e:
-        print(f"⚠️ Auto-detect model warning: {e}, using default: {ACTIVE_MODEL}")
+        print(f"Auto-detect model error: {e}")
+    
+    fallback_model = "gemini-3.6-flash"
+    print(f"Using dynamic fallback model: {fallback_model}")
+    return fallback_model
+# --------------------------------------------------------
 
-detect_best_model_once()
-# ------------------------------------------------------------------------------
-
-is_afk = False
-afk_reason = ""
-
-AFK_PRESETS = {
-    "1": "(ทำหน้ามุ่ยเบะปาก) \"ตอนนี้พี่ชายกำลังเล่นเกมอยู่นะ! อย่าเพิ่งมากวนล่ะ เดี๋ยวพี่เขาแพ้ขึ้นมาหนูไม่รู้ด้วยนะ ฝากข้อความไว้ก่อนได้เลย!\"",
-    "2": "(กอดอกทำหน้าจริงจัง) \"พี่ชายกำลังยุ่งสุดๆ อยู่น่ะสิ! มีเรื่องอะไรด่วนไหม? ฝากเรื่องไว้ก่อนได้เลย เดี๋ยวพอพี่เขาว่างหนูจะรีบสะกิดบอกให้!\"",
-    "3": "(เอานิ้วชี้แตะปากทำเสียง ชู้ว์...) \"เบาๆ หน่อยสิ! ตอนนี้พี่ชายกำลังนอนพักผ่อนอยู่นะ อย่าเพิ่งมาส่งเสียงดังรบกวนล่ะ มีอะไรก็ทิ้งข้อความไว้ได้เลย!\""
-}
-
+# ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
-คุณคือ "ซีมิระ" (Simira) บอทสาวน้อยขี้เล่น สดใส กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นอย่างอิสระใน Discord
+คุณคือ "ซีมิระ" (Simira) บอทน้องสาวสุดแสบ สดใส ขี้เล่น กวนๆ และติดพี่ชายมากๆ กำลังแชทคุยเล่นใน Discord
 กฎในการตอบ:
 1. ห้ามใช้ EMOJI หรืออีโมจิเด็ดขาด
-2. ตอบให้สั้น กระชับ เป็นกันเอง เป็นธรรมชาติตามบทสนทนาจริง
-3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (หรี่ตามมอง), (กอดอกยิ้มกวนๆ)
+2. ตอบให้สั้น กระชับ เป็นกันเองสุดๆ (ไม่พูดยาวยืดเยื้อเหมือนหุ่นยนต์)
+3. ทำท่าทางหรืออารมณ์ให้อยู่ในวงเล็บ ( ) เสมอ เช่น (หรี่ตามมองอมยิ้ม), (หัวเราะคิกคักนิ้วโป้ง)
 4. คำพูดบทสนทนาให้อยู่ในเครื่องหมายคำพูด "..."
-5. **การตอบโต้แบบอิสระ:**
-   - อ่านสไตล์การพิมพ์และอารมณ์ของผู้ใช้ แล้วตอบกลับไปตามน้ำได้เลยทันที ไม่ว่าจะกวนมา กวนกลับ ปะทะมุก หรือคุยเล่นทั่วไป
+5. **สเกลพิเศษ:** เก๊กมุกและตบมุกกลับทันทีเมื่อผู้ใช้พิมพ์กวนอ้อยหรือเล่นมุกออนไลน์ ทำตัวเหมือนน้องสาวที่ชอบขัดคอแต่แอบห่วงใย
 """
 
+# --- จัดการเซสชันแชทแยกตามรายบุคคล ---
 user_chats = {}
 
-def get_or_create_chat(user_id):
+def get_or_create_chat(user_id, model_name):
     if user_id not in user_chats:
         initial_history = []
         if user_id == OWNER_DISCORD_ID:
             initial_history = [
-                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบภายใน: คุยกับ 'พี่ชายสุดที่รัก' ให้แสดงท่าทีอ้อน กวน สนิทสนมเป็นพิเศษ]")]),
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
                 types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
             ]
         else:
             initial_history = [
-                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบภายใน: คุยกับสมาชิกในเซิร์ฟเวอร์ (ไม่ใช่พี่ชาย) ห้ามเรียกว่าพี่ ให้พูดคุยโต้ตอบกวนๆ หรือตามน้ำตามสไตล์ของคู่สนทนาได้อย่างอิสระเสรี]")])
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
             ]
         
         chat = client.chats.create(
-            model=ACTIVE_MODEL,
+            model=model_name,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.95,
+                temperature=0.9,
             ),
             history=initial_history
         )
         user_chats[user_id] = chat
     return user_chats[user_id]
+# -----------------------------------------------------------------
 
 thinking_phrases = [
-    '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิ! ขอเวลาอ่านแป๊บ..."',
-    '🔄 (เอียงคอสงสัย)\n"อืม... ขอคิดดูก่อนแป๊บหนึ่ง!"',
-    '💬 (กอดอกพึมพำ)\n"แป๊บนะ กำลังคิดอยู่..."',
-    '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านแชทแป๊บ"'
+    '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
+    '🔄 (เอียงคอสงสัย)\n"อืม... ประโยคนี้หมายความว่าไงนะ? ขอคิดดูก่อนแป๊บหนึ่ง!"',
+    '💬 (กอดอกพึมพำ)\n"แป๊บนะพี่ กำลังประมวลผลความกวนของพี่อยู่..."',
+    '✨ (หรี่ตามมองจอ)\n"เดี๋ยวๆ ขออ่านทวนรอบนึงก่อน เดี๋ยวตอบไม่ทันใจพี่"'
 ]
 
 error_phrases = [
-    '(เบะปากทำหน้าเซ็ง)\n"สมองหนูช็อตไปนิดนึง เอาใหม่อีกทีนะพี่!"'
+    '(กุมขมับส่ายหัว)\n"โอ๊ย ปวดหัวกับพี่ชะมัด เซิร์ฟเวอร์รวนหมดแล้วเนี่ย ไปพักสมองไกลๆ เลยไป!"',
+    '(ขยี้หัวตัวเองหงุดหงิด)\n"สมองหนูจะระเบิดเพราะคำถามพี่แล้วนะ ไปเล่นที่อื่นก่อนไป๊ ชักรำคาญแล้วนะ!"',
+    '(ถอนหายใจแรงๆ)\n"อะไรเนี่ย ระบบรวนไปหมดเพราะความกวนของพี่แท้ๆ ออกไปเลยนะ ชิ!"',
+    '(เบะปากทำหน้าเซ็ง)\n"ปวดหัวตึ้บเลย! วันนี้พอแค่นี้แหละ ปิดสวิตช์ตัวเองแป๊บ อย่าเพิ่งมาเซ้าซี้!"',
+    '(เอามือกุมขมับทำหน้ามึน)\n"มึนหัวชะมัด เซิร์ฟเวอร์งอแงเพราะพี่แน่ๆ ไปไกลๆ เลยไปชิ!"'
 ]
 
 intents = discord.Intents.default()
@@ -133,100 +129,48 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user}) | ใช้โมเดล: {ACTIVE_MODEL}")
-
-async def enable_afk(ctx, option: str):
-    global is_afk, afk_reason
-    if option in AFK_PRESETS:
-        afk_reason = AFK_PRESETS[option]
-    else:
-        afk_reason = f'(เอียงคอน้อยๆ) "ตอนนี้พี่ชายติดภารกิจ: \'{option}\' อยู่น่ะสิ! มีอะไรฝากข้อความไว้ได้เลย เดี๋ยวหนูไปบอกให้!"'
-    
-    is_afk = True
-    await ctx.send('(พยักหน้ารับคำสั่งอย่างแข็งขัน)\n"รับทราบค่ะพี่! เดี๋ยวหนูดูหน้าจอให้นะ พี่ไปพักผ่อนได้เลย!"')
-
-@bot.command(name="afk")
-async def afk_command(ctx, option: str = "2"):
-    await enable_afk(ctx, option)
-
-@bot.command(name="afk1")
-async def afk1_command(ctx):
-    await enable_afk(ctx, "1")
-
-@bot.command(name="afk2")
-async def afk2_command(ctx):
-    await enable_afk(ctx, "2")
-
-@bot.command(name="afk3")
-async def afk3_command(ctx):
-    await enable_afk(ctx, "3")
-
-@bot.command(name="unafk")
-async def unafk_command(ctx):
-    global is_afk, afk_reason
-    if is_afk:
-        is_afk = False
-        afk_reason = ""
-        await ctx.send('(ยิ้มแป้นวิ่งเข้าไปหา)\n"ยินดีต้อนรับกลับมาค่ะพี่ชาย! หนูปลดโหมด AFK ให้เรียบร้อยแล้วน้า~"')
-    else:
-        await ctx.send('(เอียงคอสงสัย)\n"พี่ไม่ได้เปิดโหมด AFK ไว้สักหน่อยนี่นา!"')
+    print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
 
 @bot.event
 async def on_message(message):
-    global is_afk, afk_reason
-
     try:
-        # 1. ห้ามบอทตอบตัวเอง
         if message.author == bot.user:
             return
 
-        is_dm = isinstance(message.channel, discord.DMChannel)
-
-        # 2. เช็กห้อง: ถ้าไม่ใช่ DM และไม่ได้อยู่ในห้องที่อนุญาต -> ตัดจบตั้วแต่วินาทีแรก (Early Exit)
-        if not is_dm and message.channel.id not in ALLOWED_CHANNEL_IDS:
-            return
-
-        # 3. เช็กคำสั่งบอททั่วไป (!afk, !unafk)
-        ctx = await bot.get_context(message)
-        if ctx.valid:
-            await bot.process_commands(message)
-            return
-
-        user_id = message.author.id
-        is_owner_mentioned = (bot.user in message.mentions) or (f"<@{OWNER_DISCORD_ID}>" in message.content) or (str(OWNER_DISCORD_ID) in message.content)
-
-        # 4. ระบบ AFK: ดักจับเฉพาะตอนเปิด AFK แล้ว "มีคนมาแท็กชื่อพี่ชาย" เท่านั้น
-        if is_afk and (is_dm or is_owner_mentioned) and user_id != OWNER_DISCORD_ID:
-            await asyncio.sleep(15)
-            if is_afk:
-                await message.channel.send(f"{message.author.mention} {afk_reason}")
-            return # ตอบข้อความ AFK เสร็จปุ๊บ ตัดจบการทำงานทันที!
-
-        # 🎯 **5. ล็อคเป้าห้องพูดคุยหลัก (MAIN_TALK_CHANNEL_ID):**
-        # ถ้าข้อความมาจากห้องนี้ และไม่ใช่ระบบ AFK ด้านบน -> "ตัดจบการทำงานทันที ห้าม AI ตอบคุยเล่นเด็ดขาด!"
-        if not is_dm and message.channel.id == MAIN_TALK_CHANNEL_ID:
-            return
+        # --- ตรวจสอบเงื่อนไขห้อง: อนุญาตถ้าเป็นแชทส่วนตัว (DM) หรือตรงกับห้องที่กำหนดไว้ในเซิร์ฟเวอร์ ---
+        if ALLOWED_CHANNEL_ID != 0:
+            is_dm = isinstance(message.channel, discord.DMChannel)
+            if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
+                return
+        # -----------------------------------------------------------------------------------------
 
         if not message.content or not message.content.strip():
             return
 
-        # 6. กระบวนการคุยกับ AI (จะเกิดขึ้นเฉพาะในห้อง AI_CHAT_CHANNEL_ID หรือ DM เท่านั้น!)
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
+
+        current_model = get_latest_flash_model()
+        print(f"Using Model: {current_model}")
+
+        user_id = message.author.id
+        chat_session = get_or_create_chat(user_id, current_model)
+
+        if user_id == OWNER_DISCORD_ID:
+            prompt_to_send = message.content
+        else:
+            prompt_to_send = f"[ผู้ใช้คนนี้ไม่ใช่พี่ชายของคุณ ห้ามเรียกว่าพี่เด็ดขาด]: {message.content}"
 
         response = None
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                chat_session = get_or_create_chat(user_id)
-                response = chat_session.send_message(message.content)
+                response = chat_session.send_message(prompt_to_send)
                 if response and hasattr(response, 'text') and response.text:
                     break
             except Exception as retry_err:
                 print(f"Attempt {attempt + 1} failed: {retry_err}")
-                if user_id in user_chats:
-                    del user_chats[user_id]
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1.0)
+                    time.sleep(1.5)
                 else:
                     raise retry_err
 
@@ -241,12 +185,13 @@ async def on_message(message):
                 for chunk in chunks[1:]:
                     await message.channel.send(chunk)
         else:
-            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะ!"')
+            print("WARNING: Response text was empty or invalid.")
+            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
-        if 'user_id' in locals() and user_id in user_chats:
-            del user_chats[user_id]
+        import traceback
+        traceback.print_exc()
         try:
             await message.channel.send(random.choice(error_phrases))
         except:
