@@ -44,14 +44,13 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 OWNER_DISCORD_ID = 1515771398688084008
 
 # 🎯 **กำหนดหน้าที่ของแต่ละห้องให้ชัดเจน:**
-AI_CHAT_CHANNEL_ID = 1559088513222316102   # ห้องเดียวเท่านั้นที่อนุญาตให้ AI ตอบคุยเล่นได้!
-MAIN_TALK_CHANNEL_ID = 1557629870534692905 # ห้องพูดคุยหลัก (อ่านได้อย่างเดียว ห้าม AI ตอบคุยเล่น ยกเว้นแจ้งเตือน AFK ตอนมีคนแท็กพี่ชาย)
+AI_CHAT_CHANNEL_ID = 1559088513222316102   # ห้องคุยเล่นกับ AI (ให้น้องตอบคุยเล่นได้)
+MAIN_TALK_CHANNEL_ID = 1557629870534692905 # ห้องพูดคุยหลัก (อ่านดักจับเฉพาะคนแท็กชื่อพี่ชายตอนเปิด AFK เท่านั้น ห้าม AI คุยเล่นเด็ดขาด!)
 
-# รวมไอดีห้องที่ยอมให้บอทมองเห็น
 ALLOWED_CHANNEL_IDS = [AI_CHAT_CHANNEL_ID, MAIN_TALK_CHANNEL_ID]
 
-# --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" ---
-ACTIVE_MODEL = "gemini-3.6-flash"
+# --- ระบบสแกนหาโมเดลอัตโนมัติ "แค่รอบเดียวตอนเปิดเครื่อง" (ระบบเดิมที่พี่ชายตั้งไว้) ---
+ACTIVE_MODEL = "gemini-2.5-flash" # ค่าสำรองฉุกเฉินเริ่มต้น
 
 def detect_best_model_once():
     global ACTIVE_MODEL
@@ -125,7 +124,7 @@ thinking_phrases = [
 ]
 
 error_phrases = [
-    '(เบะปากทำหน้าเซ็ง)\n"ตอนนี้สมองหนูวูบไปแป๊บหนึ่ง (โควตา AI เต็ม) รอสักพักแล้วค่อยมาคุยใหม่นะพี่!"'
+    '(เบะปากทำหน้าเซ็ง)\n"สมองหนูช็อตไปนิดนึง เอาใหม่อีกทีนะพี่!"'
 ]
 
 intents = discord.Intents.default()
@@ -183,52 +182,51 @@ async def on_message(message):
 
         is_dm = isinstance(message.channel, discord.DMChannel)
 
-        # 2. เช็กห้อง: ถ้าไม่ใช่ DM และไม่ใช่ห้องที่อยู่ใน ALLOWED_CHANNEL_IDS -> เมินทันที!
+        # 2. เช็กห้อง: ถ้าไม่ใช่ DM และไม่ได้อยู่ในห้องที่อนุญาต -> ตัดจบตั้วแต่วินาทีแรก (Early Exit)
         if not is_dm and message.channel.id not in ALLOWED_CHANNEL_IDS:
             return
 
-        # 3. เช็กคำสั่งบอท (!afk, !unafk)
+        # 3. เช็กคำสั่งบอททั่วไป (!afk, !unafk)
         ctx = await bot.get_context(message)
         if ctx.valid:
             await bot.process_commands(message)
             return
 
+        user_id = message.author.id
         is_owner_mentioned = (bot.user in message.mentions) or (f"<@{OWNER_DISCORD_ID}>" in message.content) or (str(OWNER_DISCORD_ID) in message.content)
 
-        # 4. ระบบ AFK: ถ้าเปิด AFK อยู่ แล้วมีคนแท็กพี่ชาย -> ตอบข้อความ AFK (ไม่กิน API)
-        if is_afk and (is_dm or is_owner_mentioned) and message.author.id != OWNER_DISCORD_ID:
+        # 4. ระบบ AFK: ดักจับเฉพาะตอนเปิด AFK แล้ว "มีคนมาแท็กชื่อพี่ชาย" เท่านั้น
+        if is_afk and (is_dm or is_owner_mentioned) and user_id != OWNER_DISCORD_ID:
             await asyncio.sleep(15)
             if is_afk:
                 await message.channel.send(f"{message.author.mention} {afk_reason}")
-            return
+            return # ตอบข้อความ AFK เสร็จปุ๊บ ตัดจบการทำงานทันที!
 
-        # 🛑 **เงื่อนไขสำคัญที่เพิ่มเข้ามาแก้ปัญหา:**
-        # ถ้าข้อความมาจากห้องพูดคุยหลัก (`1557629870534692905`) และ ไม่ใช่คำสั่ง/ไม่ใช่ AFK -> "ห้าม AI ตอบคุยเล่นเด็ดขาด!"
+        # 🎯 **5. ล็อคเป้าห้องพูดคุยหลัก (MAIN_TALK_CHANNEL_ID):**
+        # ถ้าข้อความมาจากห้องนี้ และไม่ใช่ระบบ AFK ด้านบน -> "ตัดจบการทำงานทันที ห้าม AI ตอบคุยเล่นเด็ดขาด!"
         if not is_dm and message.channel.id == MAIN_TALK_CHANNEL_ID:
             return
 
         if not message.content or not message.content.strip():
             return
 
-        # --- เข้าสู่กระบวนการ AI ตอบคุยเล่น (จะเกิดขึ้นเฉพาะในห้อง AI_CHAT_CHANNEL_ID หรือ DM เท่านั้น!) ---
+        # 6. กระบวนการคุยกับ AI (จะเกิดขึ้นเฉพาะในห้อง AI_CHAT_CHANNEL_ID หรือ DM เท่านั้น!)
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
-
-        user_id = message.author.id
-        chat_session = get_or_create_chat(user_id)
-
-        prompt_to_send = message.content
 
         response = None
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                response = chat_session.send_message(prompt_to_send)
+                chat_session = get_or_create_chat(user_id)
+                response = chat_session.send_message(message.content)
                 if response and hasattr(response, 'text') and response.text:
                     break
             except Exception as retry_err:
                 print(f"Attempt {attempt + 1} failed: {retry_err}")
+                if user_id in user_chats:
+                    del user_chats[user_id]
                 if attempt < max_retries - 1:
-                    time.sleep(1.5)
+                    await asyncio.sleep(1.0)
                 else:
                     raise retry_err
 
@@ -247,6 +245,8 @@ async def on_message(message):
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
+        if 'user_id' in locals() and user_id in user_chats:
+            del user_chats[user_id]
         try:
             await message.channel.send(random.choice(error_phrases))
         except:
