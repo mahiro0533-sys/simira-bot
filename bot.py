@@ -5,7 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from collections import defaultdict
 
-# --- ระบบรักษาสถานะออนไลน์บน Render ---
+# --- ระบบรักษาสถานะออนไลน์บน Render (อัปเกรดให้รองรับ HEAD request ป้องกัน Error 501) ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
@@ -13,6 +13,14 @@ class SimpleHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/plain")
             self.end_headers()
             self.wfile.write(b"Simira is alive!")
+        except Exception:
+            pass
+
+    def do_HEAD(self):
+        try:
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
         except Exception:
             pass
 
@@ -47,26 +55,26 @@ OWNER_DISCORD_ID = 1515771398688084008
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
 ALLOWED_CHANNEL_ID = 1559088513222316102
 
-# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ ---
+# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ (แบบปลอดภัย ไม่ทำให้บอทค้าง) ---
+ACTIVE_MODEL = "gemini-2.5-flash"
+
 def get_latest_flash_model():
-    available_models = []
+    global ACTIVE_MODEL
     try:
+        available_models = []
         for m in client.models.list():
             if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
                 clean_name = m.name.replace("models/", "")
                 available_models.append(clean_name)
         
         if available_models:
-            latest_model = available_models[0]
-            print(f"Auto-detected active flash model: {latest_model}")
-            return latest_model
-            
+            ACTIVE_MODEL = available_models[0]
+            print(f"Auto-detected active flash model: {ACTIVE_MODEL}")
+            return ACTIVE_MODEL
     except Exception as e:
-        print(f"Auto-detect model error: {e}")
+        print(f"Auto-detect model error: {e}, using cached/fallback: {ACTIVE_MODEL}")
     
-    fallback_model = "gemini-3.6-flash"
-    print(f"Using dynamic fallback model: {fallback_model}")
-    return fallback_model
+    return ACTIVE_MODEL
 # --------------------------------------------------------
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
@@ -137,12 +145,11 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        # --- ตรวจสอบเงื่อนไขห้อง: อนุญาตถ้าเป็นแชทส่วนตัว (DM) หรือตรงกับห้องที่กำหนดไว้ในเซิร์ฟเวอร์ ---
+        # --- ตรวจสอบเงื่อนไขห้องดั้งเดิม ---
         if ALLOWED_CHANNEL_ID != 0:
             is_dm = isinstance(message.channel, discord.DMChannel)
             if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
                 return
-        # -----------------------------------------------------------------------------------------
 
         if not message.content or not message.content.strip():
             return
@@ -150,7 +157,6 @@ async def on_message(message):
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         current_model = get_latest_flash_model()
-        print(f"Using Model: {current_model}")
 
         user_id = message.author.id
         chat_session = get_or_create_chat(user_id, current_model)
