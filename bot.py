@@ -5,7 +5,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 from collections import defaultdict
 
-# --- ระบบรักษาสถานะออนไลน์บน Render (อัปเกรดให้รองรับ HEAD request ป้องกัน Error 501) ---
+# --- ระบบรักษาสถานะออนไลน์บน Railway/Render (อัปเกรดให้รองรับ HEAD request ป้องกัน Error 501) ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
@@ -55,8 +55,8 @@ OWNER_DISCORD_ID = 1515771398688084008
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
 ALLOWED_CHANNEL_ID = 1559088513222316102
 
-# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ (แบบปลอดภัย ไม่ทำให้บอทค้าง) ---
-ACTIVE_MODEL = "gemini-2.5-flash"
+# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ (อัปเกรดเป็นรุ่นล่าสุดโดยไม่ใช้ของเก่าตกรุ่น) ---
+ACTIVE_MODEL = "gemini-3.8-flash"
 
 def get_latest_flash_model():
     global ACTIVE_MODEL
@@ -68,7 +68,21 @@ def get_latest_flash_model():
                 available_models.append(clean_name)
         
         if available_models:
-            ACTIVE_MODEL = available_models[0]
+            # ค้นหารุ่นที่ใหม่ที่สุดโดยเช็กเวอร์ชันตระกูล Flash ล่าสุด
+            latest_found = None
+            for model_name in available_models:
+                if "gemini-3.8-flash" in model_name:
+                    latest_found = model_name
+                    break
+            if not latest_found:
+                for model_name in available_models:
+                    if "gemini-3" in model_name:
+                        latest_found = model_name
+                        break
+            if not latest_found:
+                latest_found = available_models[0]
+
+            ACTIVE_MODEL = latest_found
             print(f"Auto-detected active flash model: {ACTIVE_MODEL}")
             return ACTIVE_MODEL
     except Exception as e:
