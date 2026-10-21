@@ -1,11 +1,11 @@
 import os
 import random
 import time
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
-from collections import defaultdict
 
-# --- ระบบรักษาสถานะออนไลน์บน Railway/Render (อัปเกรดให้รองรับ HEAD request ป้องกัน Error 501) ---
+# --- ระบบรักษาสถานะออนไลน์บน Railway/Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
@@ -55,41 +55,16 @@ OWNER_DISCORD_ID = 1515771398688084008
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
 ALLOWED_CHANNEL_ID = 1559088513222316102
 
-# --- ระบบอัปเดตโมเดลอัตโนมัติและสแกนหาตัวสำรองอัจฉริยะ (อัปเกรดเป็นรุ่นล่าสุดโดยไม่ใช้ของเก่าตกรุ่น) ---
-ACTIVE_MODEL = "gemini-3.8-flash"
+# --- ลิสต์โมเดล (จัดอันดับ 3.8-flash ขึ้นหน้าสุดตามที่พี่ชายต้องการ) ---
+PREFERRED_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash"
+]
 
-def get_latest_flash_model():
-    global ACTIVE_MODEL
-    try:
-        available_models = []
-        for m in client.models.list():
-            if "flash" in m.name and m.supported_generation_methods and "generateContent" in m.supported_generation_methods:
-                clean_name = m.name.replace("models/", "")
-                available_models.append(clean_name)
-        
-        if available_models:
-            # ค้นหารุ่นที่ใหม่ที่สุดโดยเช็กเวอร์ชันตระกูล Flash ล่าสุด
-            latest_found = None
-            for model_name in available_models:
-                if "gemini-3.8-flash" in model_name:
-                    latest_found = model_name
-                    break
-            if not latest_found:
-                for model_name in available_models:
-                    if "gemini-3" in model_name:
-                        latest_found = model_name
-                        break
-            if not latest_found:
-                latest_found = available_models[0]
-
-            ACTIVE_MODEL = latest_found
-            print(f"Auto-detected active flash model: {ACTIVE_MODEL}")
-            return ACTIVE_MODEL
-    except Exception as e:
-        print(f"Auto-detect model error: {e}, using cached/fallback: {ACTIVE_MODEL}")
-    
-    return ACTIVE_MODEL
-# --------------------------------------------------------
+def get_candidate_models():
+    """ดึงรายชื่อโมเดลสำรองเตรียมพร้อมไว้ทันที"""
+    return PREFERRED_MODELS.copy()
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
@@ -105,30 +80,27 @@ SYSTEM_INSTRUCTION = """
 # --- จัดการเซสชันแชทแยกตามรายบุคคล ---
 user_chats = {}
 
-def get_or_create_chat(user_id, model_name):
-    if user_id not in user_chats:
-        initial_history = []
-        if user_id == OWNER_DISCORD_ID:
-            initial_history = [
-                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
-                types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
-            ]
-        else:
-            initial_history = [
-                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
-            ]
-        
-        chat = client.chats.create(
-            model=model_name,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.9,
-            ),
-            history=initial_history
-        )
-        user_chats[user_id] = chat
-    return user_chats[user_id]
-# -----------------------------------------------------------------
+def create_chat_session(user_id, model_name):
+    """สร้างเซสชันแชตใหม่สำหรับโมเดลที่กำหนด"""
+    initial_history = []
+    if user_id == OWNER_DISCORD_ID:
+        initial_history = [
+            types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
+            types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
+        ]
+    else:
+        initial_history = [
+            types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
+        ]
+    
+    return client.chats.create(
+        model=model_name,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION,
+            temperature=0.9,
+        ),
+        history=initial_history
+    )
 
 thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
@@ -159,7 +131,6 @@ async def on_message(message):
         if message.author == bot.user:
             return
 
-        # --- ตรวจสอบเงื่อนไขห้องดั้งเดิม ---
         if ALLOWED_CHANNEL_ID != 0:
             is_dm = isinstance(message.channel, discord.DMChannel)
             if not is_dm and message.channel.id != ALLOWED_CHANNEL_ID:
@@ -168,54 +139,48 @@ async def on_message(message):
         if not message.content or not message.content.strip():
             return
 
+        user_id = message.author.id
+        
+        if user_id == OWNER_DISCORD_ID:
+            prompt_to_send = message.content.strip()
+        else:
+            prompt_to_send = f"[ผู้ใช้คนนี้ไม่ใช่พี่ชายของคุณ ห้ามเรียกว่าพี่เด็ดขาด]: {message.content.strip()}"
+
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-        current_model = get_latest_flash_model()
+        candidate_models = get_candidate_models()
+        response_text = None
 
-        user_id = message.author.id
-        chat_session = get_or_create_chat(user_id, current_model)
-
-        if user_id == OWNER_DISCORD_ID:
-            prompt_to_send = message.content
-        else:
-            prompt_to_send = f"[ผู้ใช้คนนี้ไม่ใช่พี่ชายของคุณ ห้ามเรียกว่าพี่เด็ดขาด]: {message.content}"
-
-        response = None
-        max_retries = 2
-        for attempt in range(max_retries):
+        for model_name in candidate_models:
             try:
-                response = chat_session.send_message(prompt_to_send)
+                if user_id not in user_chats:
+                    user_chats[user_id] = create_chat_session(user_id, model_name)
+                
+                chat = user_chats[user_id]
+                response = await asyncio.to_thread(chat.send_message, prompt_to_send)
+                
                 if response and hasattr(response, 'text') and response.text:
+                    response_text = response.text.strip()
                     break
-            except Exception as retry_err:
-                print(f"Attempt {attempt + 1} failed: {retry_err}")
-                if attempt < max_retries - 1:
-                    time.sleep(1.5)
-                else:
-                    raise retry_err
+            except Exception as e:
+                print(f"Model {model_name} failed: {e}")
+                if user_id in user_chats:
+                    del user_chats[user_id]
+                continue
 
-        if response and hasattr(response, 'text') and response.text:
-            reply_text = response.text.strip()
-
-            if len(reply_text) <= 2000:
-                await thinking_msg.edit(content=reply_text)
+        if response_text:
+            if len(response_text) <= 2000:
+                await thinking_msg.edit(content=response_text)
             else:
-                chunks = [reply_text[i:i+2000] for i in range(0, len(reply_text), 2000)]
+                chunks = [response_text[i:i+2000] for i in range(0, len(response_text), 2000)]
                 await thinking_msg.edit(content=chunks[0])
                 for chunk in chunks[1:]:
                     await message.channel.send(chunk)
         else:
-            print("WARNING: Response text was empty or invalid.")
-            await thinking_msg.edit(content='(ทำหน้าเลิกลั่ก)\n"เอ๊ะ... เหมือนหนูจะนึกไม่ออก เอาใหม่อีกทีนะพี่!"')
+            await thinking_msg.edit(content=random.choice(error_phrases))
 
     except Exception as outer_e:
         print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
-        import traceback
-        traceback.print_exc()
-        try:
-            await message.channel.send(random.choice(error_phrases))
-        except:
-            pass
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
