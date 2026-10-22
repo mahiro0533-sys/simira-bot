@@ -223,11 +223,30 @@ async def on_message(message):
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
-    try:
-        print("DEBUG: Attempting to start Discord bot via bot.run()...")
-        bot.run(TOKEN)
-    except Exception as bot_err:
-        print(f"CRITICAL ERROR: Failed to run Discord bot: {bot_err}")
-        traceback.print_exc()
+    # เพิ่มระบบระบบป้องกันการเชื่อมต่อรัวๆ (Auto-Reconnect with Backoff Delay)
+    # เพื่อป้องกันปัญหา Cloudflare / Rate Limit (429 Too Many Requests) เวลาสคริปต์พยายามรีคอนเนกต์ถี่เกินไป
+    retry_delay = 10
+    max_delay = 60
+    
+    while True:
+        try:
+            print("DEBUG: Attempting to start/restart Discord bot safely...")
+            bot.run(TOKEN)
+            break
+        except discord.errors.HTTPException as http_err:
+            if "429" in str(http_err) or "Too Many Requests" in str(http_err):
+                print(f"WARNING: Hit Discord Rate Limit (429). Waiting {retry_delay} seconds before reconnecting...")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_delay)
+            else:
+                print(f"CRITICAL HTTP EXCEPTION: {http_err}")
+                traceback.print_exc()
+                time.sleep(15)
+        except Exception as bot_err:
+            print(f"CRITICAL ERROR: Failed to run Discord bot: {bot_err}")
+            traceback.print_exc()
+            print(f"Retrying connection in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
 else:
     print("CRITICAL ERROR: DISCORD_TOKEN not found in environment variables!")
