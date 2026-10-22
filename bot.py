@@ -5,7 +5,7 @@ import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
-# --- ระบบรักษาสถานะออนไลน์บน Railway/Render ---
+# --- ระบบรักษาสถานะออนไลน์บน Render ---
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
@@ -49,23 +49,34 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# --- ระบบดึงโมเดล Flash ล่าสุดโดยอัตโนมัติ ---
+def get_latest_flash_model():
+    """ค้นหาและเลือกโมเดลตระกูล Flash ตัวล่าสุดที่พร้อมใช้งานโดยอัตโนมัติ"""
+    try:
+        models = client.models.list()
+        flash_models = []
+        
+        for m in models:
+            model_name = m.name.replace("models/", "")
+            if "flash" in model_name:
+                flash_models.append(model_name)
+        
+        if flash_models:
+            flash_models.sort(reverse=True)
+            selected_model = flash_models[0]
+            print(f"ระบบเลือกโมเดลอัตโนมัติสำเร็จ: {selected_model}")
+            return selected_model
+    except Exception as e:
+        print(f"Auto-detect model error: {e}")
+    
+    # ค่าสำรองฉุกเฉินหากดึงรายการไม่ได้
+    return "gemini-2.0-flash"
+
 # --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
 
 # --- กำหนดไอดีห้องที่อนุญาตในเซิร์ฟเวอร์ ---
 ALLOWED_CHANNEL_ID = 1559088513222316102
-
-# --- ลิสต์โมเดล (จัดอันดับตระกูล 3.8 ขึ้นหน้าสุดตามที่พี่ชายต้องการ) ---
-PREFERRED_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-2.0-flash"
-]
-
-def get_candidate_models():
-    """ดึงรายชื่อโมเดลสำรองเตรียมพร้อมไว้ทันที"""
-    return PREFERRED_MODELS.copy()
 
 # ตั้งค่าคาแรคเตอร์น้องซีมิระ
 SYSTEM_INSTRUCTION = """
@@ -149,25 +160,23 @@ async def on_message(message):
 
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
-        candidate_models = get_candidate_models()
         response_text = None
+        # ดึงชื่อโมเดลล่าสุดแบบสดๆ ตรงนี้
+        model_name = get_latest_flash_model()
 
-        for model_name in candidate_models:
-            try:
-                if user_id not in user_chats:
-                    user_chats[user_id] = create_chat_session(user_id, model_name)
-                
-                chat = user_chats[user_id]
-                response = await asyncio.to_thread(chat.send_message, prompt_to_send)
-                
-                if response and hasattr(response, 'text') and response.text:
-                    response_text = response.text.strip()
-                    break
-            except Exception as e:
-                print(f"Model {model_name} failed: {e}")
-                if user_id in user_chats:
-                    del user_chats[user_id]
-                continue
+        try:
+            if user_id not in user_chats:
+                user_chats[user_id] = create_chat_session(user_id, model_name)
+            
+            chat = user_chats[user_id]
+            response = await asyncio.to_thread(chat.send_message, prompt_to_send)
+            
+            if response and hasattr(response, 'text') and response.text:
+                response_text = response.text.strip()
+        except Exception as e:
+            print(f"Model {model_name} failed: {e}")
+            if user_id in user_chats:
+                del user_chats[user_id]
 
         if response_text:
             if len(response_text) <= 2000:
