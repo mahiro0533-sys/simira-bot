@@ -2,6 +2,7 @@ import os
 import random
 import time
 import asyncio
+import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread
 
@@ -30,11 +31,13 @@ def run_server():
         server = HTTPServer(("0.0.0.0", port), SimpleHandler)
         server.serve_forever()
     except Exception as e:
-        print(f"Web Server Error: {e}")
+        print(f"CRITICAL WEB SERVER ERROR: {e}")
+        traceback.print_exc()
 
 server_thread = Thread(target=run_server)
 server_thread.daemon = True
 server_thread.start()
+print("DEBUG: HTTP Server Thread Started Successfully.")
 # ------------------------------------
 
 import discord
@@ -42,19 +45,27 @@ from discord.ext import commands
 from google import genai
 from google.genai import types
 
-# ดึงค่า API Key
+# ดึงค่า API Key และเช็กความถูกต้อง
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
-    print("Error: GEMINI_API_KEY not found in environment variables.")
+    print("CRITICAL ERROR: GEMINI_API_KEY not found in environment variables!")
+else:
+    print("DEBUG: GEMINI_API_KEY detected successfully.")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+try:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    print("DEBUG: Google GenAI Client initialized successfully.")
+except Exception as e:
+    print(f"CRITICAL ERROR initializing GenAI Client: {e}")
+    traceback.print_exc()
 
 # --- ตัวแปรเก็บชื่อโมเดลปัจจุบัน (เริ่มต้นด้วยตัวสำรองที่เสถียรที่สุด) ---
 current_model_name = "gemini-2.0-flash"
 
 def fetch_latest_flash_model_sync():
-    """ฟังก์ชันเบื้องหลังสำหรับดึงชื่อโมเดลล่าสุดจาก API"""
+    """ฟังก์ชันเบื้องหลังสำหรับดึงชื่อโมเดลล่าสุดจาก API พร้อมระบบดักจับ Error ละเอียด"""
     try:
+        print("DEBUG: Attempting to fetch models from Google API...")
         models = client.models.list()
         flash_models = []
         for m in models:
@@ -64,9 +75,11 @@ def fetch_latest_flash_model_sync():
         
         if flash_models:
             flash_models.sort(reverse=True)
+            print(f"DEBUG: Found flash models: {flash_models}")
             return flash_models[0]
     except Exception as e:
-        print(f"Auto-detect background error: {e}")
+        print(f"WARNING: Auto-detect background error caught: {e}")
+        traceback.print_exc()
     return None
 
 # --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
@@ -91,25 +104,30 @@ user_chats = {}
 
 def create_chat_session(user_id, model_name):
     """สร้างเซสชันแชตใหม่สำหรับโมเดลที่กำหนด"""
-    initial_history = []
-    if user_id == OWNER_DISCORD_ID:
-        initial_history = [
-            types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
-            types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
-        ]
-    else:
-        initial_history = [
-            types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
-        ]
-    
-    return client.chats.create(
-        model=model_name,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=0.9,
-        ),
-        history=initial_history
-    )
+    try:
+        initial_history = []
+        if user_id == OWNER_DISCORD_ID:
+            initial_history = [
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้คือ 'พี่ชายสุดที่รักและรู้ใจที่สุด' ของซีมิระ ให้แสดงท่าทีอ้อน กวน หรือสนิทสนมเป็นพิเศษทันที]")]),
+                types.Content(role="model", parts=[types.Part.from_text(text='(ยิ้มแป้นวิ่งเข้าไปเกาะแขน)\n"รู้แล้วน่า! ก็พี่ชายคนโปรดของหนูคนนี้นี่นา มีอะไรเหรอถึงมาหาหนูเนี่ย?"')])
+            ]
+        else:
+            initial_history = [
+                types.Content(role="user", parts=[types.Part.from_text(text="[ระบบแจ้งเตือนภายใน: คนที่กำลังคุยด้วยอยู่นี้ 'ไม่ใช่พี่ชาย' ของซีมิระ ห้ามเรียกว่าพี่เด็ดขาด ให้ทำตัวแสบๆ กวนๆ หยิ่งใส่ หรือเรียกเขาด้วยชื่อ/คนอื่นแทน]")])
+            ]
+        
+        return client.chats.create(
+            model=model_name,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.9,
+            ),
+            history=initial_history
+        )
+    except Exception as e:
+        print(f"ERROR inside create_chat_session for user {user_id} with model {model_name}: {e}")
+        traceback.print_exc()
+        raise e
 
 thinking_phrases = [
     '⏳ (ทำหน้ามุ่ยใส่จอ)\n"เดี๋ยวสิพี่! ขอเวลาอ่านข้อความแป๊บ ยาวเป็นหางว่าวเลย..."',
@@ -133,15 +151,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     global current_model_name
-    print("กำลังตรวจสอบโมเดล Flash ล่าสุดในเบื้องหลัง...")
-    
-    # ดึงโมเดลแบบไม่บล็อกการทำงานหลัก
-    latest_model = await asyncio.to_thread(fetch_latest_flash_model_sync)
-    if latest_model:
-        current_model_name = latest_model
-        print(f"อัปเดตโมเดลล่าสุดอัตโนมัติสำเร็จ: {current_model_name}")
-    else:
-        print(f"ใช้โมเดลมาตรฐานสำรอง: {current_model_name}")
+    print(f"DEBUG: Discord bot logged in as {bot.user}. Checking models in background...")
+    try:
+        latest_model = await asyncio.to_thread(fetch_latest_flash_model_sync)
+        if latest_model:
+            current_model_name = latest_model
+            print(f"SUCCESS: Auto-selected latest flash model: {current_model_name}")
+        else:
+            print(f"FALLBACK: Using default stable model: {current_model_name}")
+    except Exception as e:
+        print(f"ERROR in on_ready background task: {e}")
+        traceback.print_exc()
         
     print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
 
@@ -169,7 +189,6 @@ async def on_message(message):
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         response_text = None
-        # ใช้ตัวแปรโมเดลล่าสุดที่ระบบดึงมาให้โดยอัตโนมัติ
         model_name = current_model_name
 
         try:
@@ -182,7 +201,8 @@ async def on_message(message):
             if response and hasattr(response, 'text') and response.text:
                 response_text = response.text.strip()
         except Exception as e:
-            print(f"Model {model_name} failed: {e}")
+            print(f"ERROR during chat message processing with model {model_name}: {e}")
+            traceback.print_exc()
             if user_id in user_chats:
                 del user_chats[user_id]
 
@@ -198,10 +218,16 @@ async def on_message(message):
             await thinking_msg.edit(content=random.choice(error_phrases))
 
     except Exception as outer_e:
-        print(f"MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
+        print(f"CRITICAL MESSAGE EVENT ERROR DETECTED: {str(outer_e)}")
+        traceback.print_exc()
 
 TOKEN = os.environ.get("DISCORD_TOKEN")
 if TOKEN:
-    bot.run(TOKEN)
+    try:
+        print("DEBUG: Attempting to start Discord bot via bot.run()...")
+        bot.run(TOKEN)
+    except Exception as bot_err:
+        print(f"CRITICAL ERROR: Failed to run Discord bot: {bot_err}")
+        traceback.print_exc()
 else:
-    print("Error: DISCORD_TOKEN not found in environment variables.")
+    print("CRITICAL ERROR: DISCORD_TOKEN not found in environment variables!")
