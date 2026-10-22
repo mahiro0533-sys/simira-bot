@@ -49,13 +49,14 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# --- ระบบดึงโมเดล Flash ล่าสุดโดยอัตโนมัติ ---
-def get_latest_flash_model():
-    """ค้นหาและเลือกโมเดลตระกูล Flash ตัวล่าสุดที่พร้อมใช้งานโดยอัตโนมัติ"""
+# --- ตัวแปรเก็บชื่อโมเดลปัจจุบัน (เริ่มต้นด้วยตัวสำรองที่เสถียรที่สุด) ---
+current_model_name = "gemini-2.0-flash"
+
+def fetch_latest_flash_model_sync():
+    """ฟังก์ชันเบื้องหลังสำหรับดึงชื่อโมเดลล่าสุดจาก API"""
     try:
         models = client.models.list()
         flash_models = []
-        
         for m in models:
             model_name = m.name.replace("models/", "")
             if "flash" in model_name:
@@ -63,14 +64,10 @@ def get_latest_flash_model():
         
         if flash_models:
             flash_models.sort(reverse=True)
-            selected_model = flash_models[0]
-            print(f"ระบบเลือกโมเดลอัตโนมัติสำเร็จ: {selected_model}")
-            return selected_model
+            return flash_models[0]
     except Exception as e:
-        print(f"Auto-detect model error: {e}")
-    
-    # ค่าสำรองฉุกเฉินหากดึงรายการไม่ได้
-    return "gemini-2.0-flash"
+        print(f"Auto-detect background error: {e}")
+    return None
 
 # --- กำหนดไอดีเจ้าของ (พี่ชายตัวจริง) ---
 OWNER_DISCORD_ID = 1515771398688084008
@@ -135,6 +132,17 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
+    global current_model_name
+    print("กำลังตรวจสอบโมเดล Flash ล่าสุดในเบื้องหลัง...")
+    
+    # ดึงโมเดลแบบไม่บล็อกการทำงานหลัก
+    latest_model = await asyncio.to_thread(fetch_latest_flash_model_sync)
+    if latest_model:
+        current_model_name = latest_model
+        print(f"อัปเดตโมเดลล่าสุดอัตโนมัติสำเร็จ: {current_model_name}")
+    else:
+        print(f"ใช้โมเดลมาตรฐานสำรอง: {current_model_name}")
+        
     print(f"น้องซีมิระพร้อมลุยแล้วจ้า! (Logged in as {bot.user})")
 
 @bot.event
@@ -161,8 +169,8 @@ async def on_message(message):
         thinking_msg = await message.channel.send(random.choice(thinking_phrases))
 
         response_text = None
-        # ดึงชื่อโมเดลล่าสุดแบบสดๆ ตรงนี้
-        model_name = get_latest_flash_model()
+        # ใช้ตัวแปรโมเดลล่าสุดที่ระบบดึงมาให้โดยอัตโนมัติ
+        model_name = current_model_name
 
         try:
             if user_id not in user_chats:
